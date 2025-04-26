@@ -30,7 +30,7 @@ Tasks:
 │   ├── js/
 │   ├── index.html      # Main PWA file
 │   └── manifest.json
-├── libs/               # External or shared libraries (canvusapi.go is here)
+├── internal/canvusapi/ # Canvus API client (was libs/canvusapi.go)
 │   └── canvusapi.go    # Provided MCS API client
 └── go.mod              # Go module file
 └── go.sum

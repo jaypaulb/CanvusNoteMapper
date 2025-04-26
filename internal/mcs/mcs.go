@@ -1,7 +1,7 @@
 package mcs
 
 import (
-	"github.com/jaypaulb/CanvusNoteMapper/libs/canvusapi"
+	"github.com/jaypaulb/CanvusNoteMapper/internal/canvusapi"
 )
 
 // MCSClient wraps MCS API interactions
