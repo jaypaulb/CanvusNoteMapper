@@ -28,6 +28,7 @@ type AnchorInfo struct {
 	Y      float64 `json:"y"`
 	Width  float64 `json:"width"`
 	Height float64 `json:"height"`
+	Scale  float64 `json:"scale"`
 	// Add more fields as needed
 }
 
@@ -146,4 +147,55 @@ func (c *MCSClient) GetCanvasSize(canvasID string) (*CanvasSize, error) {
 		}
 	}
 	return nil, fmt.Errorf("SharedCanvas widget not found")
+}
+
+func (c *MCSClient) GetAnchorInfo(canvasID, anchorID string) (*AnchorInfo, error) {
+	client := canvusapi.NewClient(c.Server, canvasID, c.APIKey)
+	url := client.Server + "/api/v1/canvases/" + canvasID + "/anchors/" + anchorID
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Private-Token", c.APIKey)
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("MCS error: %s", string(bodyBytes))
+	}
+	var a map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&a); err != nil {
+		return nil, err
+	}
+	anchor := AnchorInfo{}
+	if id, ok := a["id"].(string); ok {
+		anchor.ID = id
+	}
+	if name, ok := a["anchor_name"].(string); ok {
+		anchor.Name = name
+	}
+	if loc, ok := a["location"].(map[string]interface{}); ok {
+		if x, ok := loc["x"].(float64); ok {
+			anchor.X = x
+		}
+		if y, ok := loc["y"].(float64); ok {
+			anchor.Y = y
+		}
+	}
+	if size, ok := a["size"].(map[string]interface{}); ok {
+		if w, ok := size["width"].(float64); ok {
+			anchor.Width = w
+		}
+		if h, ok := size["height"].(float64); ok {
+			anchor.Height = h
+		}
+	}
+	if scale, ok := a["scale"].(float64); ok {
+		anchor.Scale = scale
+	}
+	// Add more fields as needed
+	return &anchor, nil
 }

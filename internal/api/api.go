@@ -150,26 +150,81 @@ func CreateNotesHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	// --- Scaling Logic ---
+	// Require imageWidth and imageHeight in the request
 	var req struct {
-		CanvasID string        `json:"canvasID"`
-		Notes    []interface{} `json:"notes"`
-		ZoneID   string        `json:"zoneID"`
+		CanvasID    string        `json:"canvasID"`
+		Notes       []interface{} `json:"notes"`
+		ZoneID      string        `json:"zoneID"`
+		ImageWidth  float64       `json:"imageWidth"`
+		ImageHeight float64       `json:"imageHeight"`
 	}
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[CreateNotesHandler] Error decoding request body: %v\n", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"error":"Invalid JSON: "` + err.Error() + `}`))
 		return
 	}
-	log.Printf("[CreateNotesHandler] Request: %+v\n", req)
+	if req.ImageWidth == 0.0 || req.ImageHeight == 0.0 {
+		log.Printf("[CreateNotesHandler] imageWidth or imageHeight missing or zero, cannot scale notes correctly.")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"imageWidth and imageHeight required"}`))
+		return
+	}
+
 	cfg := config.GetConfig()
 	client := mcs.NewClient(cfg.MCSServer, cfg.APIKey, req.CanvasID)
+
+	// Fetch anchor info for the selected zone
+	anchor, err := client.GetAnchorInfo(req.CanvasID, req.ZoneID)
+	if err != nil {
+		log.Printf("[CreateNotesHandler] Failed to fetch anchor info: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to fetch anchor info: "` + err.Error() + `}`))
+		return
+	}
+	anchorJson, _ := json.MarshalIndent(anchor, "", "  ")
+	log.Printf("[CreateNotesHandler] Anchor zone details: %s", string(anchorJson))
+
+	// Calculate scaleFactor (difference between image and anchor zone size)
+	scaleFactor := 1.0
+	if anchor.Width > 0 && anchor.Height > 0 {
+		scaleFactor = min(anchor.Width/req.ImageWidth, anchor.Height/req.ImageHeight)
+	}
+	log.Printf("[CreateNotesHandler] Calculated scaleFactor: %.4f (imageWidth=%.2f, imageHeight=%.2f, anchor.Width=%.2f, anchor.Height=%.2f)", scaleFactor, req.ImageWidth, req.ImageHeight, anchor.Width, anchor.Height)
+	// --- End Scaling Logic ---
+
+	finalScale := scaleFactor * anchor.Scale
+
 	for i, note := range req.Notes {
 		noteMap, _ := note.(map[string]interface{})
 		noteJson, _ := json.MarshalIndent(noteMap, "", "  ")
 		log.Printf("[CreateNotesHandler][Note %d] Source: %s", i+1, string(noteJson))
-		// Target payload (same as noteMap)
+
+		// 1. Scale location and size by scaleFactor * anchor.Scale
+		// 2. Offset location by anchor.X and anchor.Y
+		// 3. Set note.scale = 1
+		if noteMap["location"] != nil {
+			if loc, ok := noteMap["location"].(map[string]interface{}); ok {
+				noteMap["location"] = map[string]interface{}{
+					"x": anchor.X + loc["x"].(float64)*finalScale,
+					"y": anchor.Y + loc["y"].(float64)*finalScale,
+				}
+			}
+		}
+		if noteMap["size"] != nil {
+			if size, ok := noteMap["size"].(map[string]interface{}); ok {
+				noteMap["size"] = map[string]interface{}{
+					"width":  size["width"].(float64) * finalScale,
+					"height": size["height"].(float64) * finalScale,
+				}
+			}
+		}
+		// Set the note's scale to 1 (all scaling handled in math above)
+		noteMap["scale"] = 1
+		// Optionally, set parent_id or other anchor fields if needed
+
+		noteJson, _ = json.MarshalIndent(noteMap, "", "  ")
 		log.Printf("[CreateNotesHandler][Note %d] Target (to MCS): %s", i+1, string(noteJson))
 		resp, err := client.CreateNote(req.CanvasID, noteMap)
 		respJson, _ := json.MarshalIndent(resp, "", "  ")
@@ -247,6 +302,76 @@ func GetCanvasSizeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(size)
+}
+
+// GET /api/get-canvases
+func GetCanvasesHandler(w http.ResponseWriter, r *http.Request) {
+	cfg := config.GetConfig()
+	if cfg.MCSServer == "" || cfg.APIKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"MCS credentials not set"}`))
+		return
+	}
+	client := mcs.NewClient(cfg.MCSServer, cfg.APIKey, "")
+	canvases, err := client.GetCanvases()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to fetch canvases: "` + err.Error() + `}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"canvases": canvases})
+}
+
+// GET /api/get-anchors?canvasID=...
+func GetAnchorsOnlyHandler(w http.ResponseWriter, r *http.Request) {
+	cfg := config.GetConfig()
+	canvasID := r.URL.Query().Get("canvasID")
+	if cfg.MCSServer == "" || cfg.APIKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"MCS credentials not set"}`))
+		return
+	}
+	if canvasID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"canvasID required"}`))
+		return
+	}
+	client := mcs.NewClient(cfg.MCSServer, cfg.APIKey, canvasID)
+	anchors, err := client.GetAnchors(canvasID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to fetch anchors: "` + err.Error() + `}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"anchors": anchors})
+}
+
+// GET /api/get-anchor-info?canvasID=...&anchorID=...
+func GetAnchorInfoHandler(w http.ResponseWriter, r *http.Request) {
+	cfg := config.GetConfig()
+	canvasID := r.URL.Query().Get("canvasID")
+	anchorID := r.URL.Query().Get("anchorID")
+	if cfg.MCSServer == "" || cfg.APIKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"MCS credentials not set"}`))
+		return
+	}
+	if canvasID == "" || anchorID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"canvasID and anchorID required"}`))
+		return
+	}
+	client := mcs.NewClient(cfg.MCSServer, cfg.APIKey, canvasID)
+	anchor, err := client.GetAnchorInfo(canvasID, anchorID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to fetch anchor info: "` + err.Error() + `}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(anchor)
 }
 
 // Helper for min (copy from mapping)

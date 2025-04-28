@@ -16,7 +16,9 @@ func main() {
 	mux.HandleFunc("/api/create-notes", api.CreateNotesHandler)
 	mux.HandleFunc("/api/set-credentials", api.SetCredentialsHandler)
 	mux.HandleFunc("/api/get-canvas-size", api.GetCanvasSizeHandler)
-	mux.HandleFunc("/api/get-anchors", api.GetAnchorsHandler)
+	mux.HandleFunc("/api/get-canvases", api.GetCanvasesHandler)
+	mux.HandleFunc("/api/get-anchors", api.GetAnchorsOnlyHandler)
+	mux.HandleFunc("/api/get-anchor-info", api.GetAnchorInfoHandler)
 
 	// Serve static files from web directory
 	mux.Handle("/", http.FileServer(http.Dir("web")))
