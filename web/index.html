@@ -8,10 +8,10 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="dark">
-    <header>
-        <h1>Canvus NoteScan</h1>
-        <button id="darkmode-toggle" title="Toggle dark/light mode">
-            <span id="darkmode-icon">🌙</span>
+    <header style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 1em; height: 64px;">
+        <h1 style="margin: 0; font-size: 2em; line-height: 1;">Canvus NoteScan</h1>
+        <button id="darkmode-toggle" title="Toggle dark/light mode" style="margin-left: 0; display: flex; align-items: center; height: 40px; width: 40px; justify-content: center; font-size: 2em">
+            <span id="darkmode-icon" style="display: flex; align-items: center; justify-content: center; height: 100%;">🌙</span>
         </button>
     </header>
     <nav>
@@ -29,11 +29,6 @@
                 <button type="submit">Save Credentials</button>
             </form>
             <div id="credentials-status"></div>
-            <h3>Canvas & Zone</h3>
-            <button id="fetch-zones">Fetch Canvases/Zones</button>
-            <select id="canvas-select"></select>
-            <select id="zone-select"></select>
-            <div id="zone-status"></div>
         </section>
         <section id="scan-section" class="tab-section" style="display:none;">
             <div id="image-capture" class="input-row">
@@ -51,13 +46,18 @@
             <div id="scan-results-container" style="display:none;">
                 <h3>Extracted Notes</h3>
                 <div>
-                    <button id="select-all">Select All</button>
-                    <button id="deselect-all">Deselect All</button>
+                    <button id="select-all" type="button">Select All</button>
+                    <button id="deselect-all" type="button">Deselect All</button>
                 </div>
                 <div id="thumbnails"></div>
             </div>
+            <label for="canvas-select">Target Canvas</label>
+            <select id="canvas-select"></select>
+            <label for="zone-select">Target Anchor Zone</label>
+            <select id="zone-select"></select>
             <button id="create-notes" style="display:none;">Create Notes in MCS</button>
             <div id="create-status"></div>
+            <div id="zone-status"></div>
         </section>
     </main>
     <script src="js/app.js"></script>
