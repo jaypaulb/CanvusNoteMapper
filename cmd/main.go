@@ -13,9 +13,10 @@ func main() {
 	// API routes
 	mux.HandleFunc("/api/upload-image", api.UploadImageHandler)
 	mux.HandleFunc("/api/scan-notes", api.ScanNotesHandler)
-	mux.HandleFunc("/api/get-zones", api.GetZonesHandler)
 	mux.HandleFunc("/api/create-notes", api.CreateNotesHandler)
 	mux.HandleFunc("/api/set-credentials", api.SetCredentialsHandler)
+	mux.HandleFunc("/api/get-canvas-size", api.GetCanvasSizeHandler)
+	mux.HandleFunc("/api/get-anchors", api.GetAnchorsHandler)
 
 	// Serve static files from web directory
 	mux.Handle("/", http.FileServer(http.Dir("web")))

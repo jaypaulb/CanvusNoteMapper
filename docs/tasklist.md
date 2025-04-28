@@ -66,6 +66,8 @@ Tasks:
 
 [x] Implement Basic Error Handling: Add initial error handling in handlers to catch obvious issues (e.g., missing request data) and return appropriate HTTP status codes.
 
+[✔] Add Detailed Mapping & Scaling Logging: The backend now logs image size, zone size, scaling factor, offsets, source notes, and mapped notes in ScanNotesHandler. The mapping and scaling logic is fully traceable in backend logs before notes are sent to MCS.
+
 3. Frontend Development (PWA)
 [x] Basic HTML Structure: Create /web/index.html with the basic structure for a PWA, including links to CSS and JS files, and placeholders for UI elements.
 
@@ -89,11 +91,11 @@ Tasks:
 [x] Verify Data Flow: Test that data is correctly sent from the frontend to the backend, processed, and returned to the frontend at each step of the workflow (Credentials -> Fetch Zones -> Upload Image -> Scan -> Create Notes).
 
 5. Local Testing & Refinement
-[ ] Manual UI/UX Walkthrough: Interact with the PWA in your browser, following the user journey: enter credentials, fetch/select zones, upload an image, trigger scan, review results, create notes. Test on both desktop and mobile browsers (using browser developer tools or connecting a device).
-[ ] Test Backend Endpoints: Use curl or Postman to directly test each backend API endpoint (/api/set-credentials, /api/get-zones, /api/upload-image, /api/scan-notes, /api/create-notes) with various inputs to ensure they handle requests and return responses as expected.
-[ ] Validate Error Handling (Local): Intentionally provide incorrect input (e.g., wrong MCS address, invalid API key, non-image file) to trigger errors and verify that the backend returns appropriate responses and the frontend displays helpful error messages.
-[ ] Refine UI/UX: Based on manual testing, improve the user interface and experience for clarity and ease of use.
-[ ] Code Review and Cleanup: Review both Go and frontend code for quality, consistency, and removal of any temporary code. Run go fmt ./... and go mod tidy.
+[x] Manual UI/UX Walkthrough: Interact with the PWA in your browser, following the user journey: enter credentials, fetch/select zones, upload an image, trigger scan, review results, create notes. Test on both desktop and mobile browsers (using browser developer tools or connecting a device).
+[x] Test Backend Endpoints: Use curl or Postman to directly test each backend API endpoint (/api/set-credentials, /api/get-zones, /api/upload-image, /api/scan-notes, /api/create-notes) with various inputs to ensure they handle requests and return responses as expected.
+[x] Validate Error Handling (Local): Intentionally provide incorrect input (e.g., wrong MCS address, invalid API key, non-image file) to trigger errors and verify that the backend returns appropriate responses and the frontend displays helpful error messages.
+[x] Refine UI/UX: Based on manual testing, improve the user interface and experience for clarity and ease of use.
+[x] Code Review and Cleanup: Review both Go and frontend code for quality, consistency, and removal of any temporary code. Run go fmt ./... and go mod tidy.
 
 [Redundant] Test Offline Functionality (Local): Offline mode is not supported, as the app requires internet access to communicate with the LLM and MCS services. The PWA shell may load, but core features will not function without connectivity.
 
@@ -104,7 +106,7 @@ Tasks:
 6. Implement Actual LLM and Spatial Mapping
 [ ] Integrate Actual LLM: Replace the LLM stub (/internal/llm) with code that interacts with your chosen LLM service API. This requires implementing the API client logic and parsing the LLM's response to extract note data.
 
-[ ] Implement Actual Spatial Mapping: Replace the spatial mapping stub (/internal/mapping) with the full implementation of the "longest side method" algorithm in Go. This logic will use the real note data from the LLM and the dimensions of the image and selected zone to calculate the final digital note positions and sizes.
+[x] Implement Actual Spatial Mapping: Replace the spatial mapping stub (/internal/mapping) with the full implementation of the "longest side method" algorithm in Go. This logic will use the real note data from the LLM and the dimensions of the image and selected zone to calculate the final digital note positions and sizes.
 
 [ ] Test LLM and Mapping: Create specific tests for the LLM integration and spatial mapping logic using sample images and expected outputs.
 

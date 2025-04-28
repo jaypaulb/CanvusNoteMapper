@@ -59,32 +59,86 @@ credentialsForm.addEventListener('submit', async (e) => {
     credentialsStatus.textContent = data.status === 'ok' ? 'Credentials saved.' : (data.error || 'Error');
 });
 
-// --- Fetch Zones ---
-const fetchZonesBtn = document.getElementById('fetch-zones');
+// --- Fetch Anchors ---
+const fetchAnchorsBtn = document.getElementById('fetch-zones');
 const canvasSelect = document.getElementById('canvas-select');
-const zoneSelect = document.getElementById('zone-select');
-const zoneStatus = document.getElementById('zone-status');
-fetchZonesBtn.addEventListener('click', async () => {
-    const res = await fetch('/api/get-zones');
-    if (!res.ok) {
+const anchorSelect = document.getElementById('zone-select');
+const anchorStatus = document.getElementById('zone-status');
+fetchAnchorsBtn.addEventListener('click', async () => {
+    try {
+        const res = await fetch('/api/get-anchors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            anchorStatus.textContent = data.error || 'Error fetching anchors. Please check your credentials and server connection.';
+            return;
+        }
         const data = await res.json();
-        zoneStatus.textContent = data.error || 'Error fetching zones.';
-        return;
+        canvasSelect.innerHTML = '';
+        data.canvases.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            canvasSelect.appendChild(opt);
+        });
+        anchorSelect.innerHTML = '';
+        data.anchors.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            opt.textContent = a.name;
+            anchorSelect.appendChild(opt);
+        });
+        anchorStatus.textContent = 'Anchors loaded.';
+    } catch (err) {
+        anchorStatus.textContent = 'Network or server error while fetching canvases/anchors.';
     }
-    const data = await res.json();
-    canvasSelect.innerHTML = '';
-    data.canvases.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        canvasSelect.appendChild(opt);
-    });
-    zoneSelect.innerHTML = '';
-    data.zones.forEach(z => {
-        const opt = document.createElement('option');
-        opt.value = z; opt.textContent = z;
-        zoneSelect.appendChild(opt);
-    });
-    zoneStatus.textContent = 'Zones loaded.';
+});
+
+// --- Auto-update anchors when canvas changes ---
+canvasSelect.addEventListener('change', async () => {
+    const selectedCanvas = canvasSelect.value;
+    anchorSelect.innerHTML = '';
+    anchorStatus.textContent = 'Loading anchors...';
+    try {
+        const res = await fetch('/api/get-anchors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ canvasID: selectedCanvas })
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            anchorStatus.textContent = data.error || 'Error fetching anchors.';
+            return;
+        }
+        const data = await res.json();
+        if (Array.isArray(data.anchors)) {
+            anchorData = data.anchors.map(a => ({
+                id: a.id,
+                name: a.name,
+                width: a.width,
+                height: a.height,
+                x: a.x,
+                y: a.y,
+                scale: a.scale
+            }));
+            anchorSelect.innerHTML = '';
+            anchorData.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.id;
+                opt.textContent = a.name;
+                anchorSelect.appendChild(opt);
+            });
+            anchorStatus.textContent = 'Anchors loaded.';
+        } else {
+            anchorStatus.textContent = 'No anchors found for this canvas.';
+        }
+    } catch (err) {
+        anchorStatus.textContent = 'Error fetching anchors.';
+    }
+    updateCanvasAnchorInfo();
 });
 
 // --- Image Capture/Upload & Auto-Scan ---
@@ -95,7 +149,7 @@ let uploadedImage = null;
 let lastScanData = null;
 let selectedNotes = [];
 const imageInputLabel = document.getElementById('image-input-label');
-// imageInputLabel.addEventListener('click', () => imageInput.click());
+// Make Choose File label trigger file input
 imageInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -125,19 +179,33 @@ imageInput.addEventListener('change', async (e) => {
 });
 
 async function autoScanNotes() {
-    // For the stub, just send empty imageData and mock dimensions
+    // Get selected anchor info
+    const anchorOption = anchorSelect.options[anchorSelect.selectedIndex];
+    let zoneWidth = 640, zoneHeight = 480, zoneX = 0, zoneY = 0, zoneScale = 1;
+    if (anchorOption) {
+        const anchor = anchorData.find(a => a.id === anchorOption.value);
+        if (anchor) {
+            zoneWidth = Math.round(anchor.width);
+            zoneHeight = Math.round(anchor.height);
+            zoneX = Math.round(anchor.x);
+            zoneY = Math.round(anchor.y);
+            zoneScale = anchor.scale !== undefined ? anchor.scale : 1;
+        }
+    }
     const res = await fetch('/api/scan-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             imageData: [],
             imageDimensions: [640, 480],
-            zoneDimensions: [640, 480]
+            zoneDimensions: [zoneWidth, zoneHeight],
+            zoneLocation: [zoneX, zoneY],
+            zoneScale: zoneScale
         })
     });
     const data = await res.json();
     lastScanData = data;
-    renderThumbnails(data);
+    renderThumbnails(data.notes || []);
 }
 
 // --- Thumbnails, Selection, Select All/Deselect All ---
@@ -147,6 +215,16 @@ const selectAllBtn = document.getElementById('select-all');
 const deselectAllBtn = document.getElementById('deselect-all');
 const createBtn = document.getElementById('create-notes');
 const createStatus = document.getElementById('create-status');
+let anchorData = [];
+
+// Add display for selected canvas and anchor info
+let canvasAnchorInfo = document.getElementById('canvas-anchor-info');
+if (!canvasAnchorInfo) {
+    canvasAnchorInfo = document.createElement('div');
+    canvasAnchorInfo.id = 'canvas-anchor-info';
+    canvasAnchorInfo.style.margin = '0.5em 0';
+    createBtn.parentNode.insertBefore(canvasAnchorInfo, createBtn);
+}
 
 function renderThumbnails(notes) {
     if (!Array.isArray(notes) || notes.length === 0) {
@@ -161,12 +239,12 @@ function renderThumbnails(notes) {
     notes.forEach((note, idx) => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail';
-        // If note has a color, use as background
-        if (note.Color) thumb.style.background = note.Color;
+        // Use MCS API fields
+        if (note.background_color) thumb.style.background = note.background_color;
         thumb.innerHTML = `
             <input type="checkbox" class="note-checkbox" data-idx="${idx}" checked>
-            <div><strong>${note.Content || 'Note'}</strong></div>
-            <div style="font-size:0.8em;">${note.Width}x${note.Height}</div>
+            <div><strong>${note.text || 'Note'}</strong></div>
+            <div style="font-size:0.8em;">${note.size?.width || 0}x${note.size?.height || 0}</div>
         `;
         thumbnailsDiv.appendChild(thumb);
     });
@@ -181,31 +259,27 @@ function renderThumbnails(notes) {
             }
         });
     });
+    updateCanvasAnchorInfo();
 }
-selectAllBtn.addEventListener('click', () => {
-    thumbnailsDiv.querySelectorAll('.note-checkbox').forEach(cb => { cb.checked = true; });
-    if (lastScanData) selectedNotes = lastScanData.map((_, i) => i);
-});
-deselectAllBtn.addEventListener('click', () => {
-    thumbnailsDiv.querySelectorAll('.note-checkbox').forEach(cb => { cb.checked = false; });
-    selectedNotes = [];
-});
 
-// --- Create Notes ---
-createBtn.addEventListener('click', async () => {
-    if (!lastScanData || selectedNotes.length === 0) {
-        createStatus.textContent = 'Select at least one note.';
-        return;
+// --- Canvas/Zone selection display ---
+function updateCanvasAnchorInfo() {
+    const canvasName = canvasSelect.options[canvasSelect.selectedIndex]?.text || '';
+    const anchorOption = anchorSelect.options[anchorSelect.selectedIndex];
+    let anchorInfo = '';
+    if (anchorOption) {
+        const anchor = anchorData.find(a => a.id === anchorOption.value);
+        if (anchor) {
+            const x = Math.floor(anchor.x);
+            const y = Math.floor(anchor.y);
+            anchorInfo = ` → ${anchor.name} [${anchor.width}x${anchor.height} @ ${x}, ${y}]`;
+        }
     }
-    const notesToSend = selectedNotes.map(i => lastScanData[i]);
-    const res = await fetch('/api/create-notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(notesToSend)
-    });
-    const data = await res.json();
-    createStatus.textContent = data.status || data.error || 'Error creating notes.';
-});
+    canvasAnchorInfo.textContent = canvasName + (anchorInfo ? anchorInfo : '');
+}
+
+canvasSelect.addEventListener('change', updateCanvasAnchorInfo);
+anchorSelect.addEventListener('change', updateCanvasAnchorInfo);
 
 // --- Camera Capture ---
 const captureBtn = document.getElementById('capture-btn');
@@ -214,6 +288,8 @@ const captureCanvas = document.getElementById('capture-canvas');
 const cameraContainer = document.getElementById('camera-container');
 const closeCameraBtn = document.getElementById('close-camera');
 let stream = null;
+
+// Toggle camera on/off with Capture button
 captureBtn.addEventListener('click', async () => {
     if (!stream) {
         try {
@@ -228,10 +304,11 @@ captureBtn.addEventListener('click', async () => {
             return;
         }
     } else {
-        // If already streaming, close camera
         closeCamera();
     }
 });
+
+// Always show close button when camera is open
 closeCameraBtn.addEventListener('click', closeCamera);
 function closeCamera() {
     if (stream) {
@@ -242,25 +319,24 @@ function closeCamera() {
     cameraContainer.style.display = 'none';
     imageStatus.textContent = '';
 }
+
+// Capture image from video stream
 cameraStream.addEventListener('click', () => {
     if (!stream) return;
-    // Draw video frame to canvas
     captureCanvas.width = cameraStream.videoWidth;
     captureCanvas.height = cameraStream.videoHeight;
     captureCanvas.getContext('2d').drawImage(cameraStream, 0, 0);
-    // Convert to blob and upload
     captureCanvas.toBlob(async (blob) => {
         preview.src = captureCanvas.toDataURL('image/png');
         preview.style.display = 'block';
+        preview.style.margin = '1em auto 0 auto'; // Center preview
         cameraStream.style.display = 'none';
         cameraContainer.style.display = 'none';
         imageStatus.textContent = 'Uploading photo...';
-        // Stop camera
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
             stream = null;
         }
-        // Upload
         const formData = new FormData();
         formData.append('image', blob, 'capture.png');
         const res = await fetch('/api/upload-image', {
@@ -273,4 +349,35 @@ cameraStream.addEventListener('click', () => {
             autoScanNotes();
         }
     }, 'image/png');
+});
+
+// --- Create Notes ---
+createBtn.addEventListener('click', async () => {
+    if (!lastScanData || selectedNotes.length === 0) {
+        createStatus.textContent = 'Select at least one note.';
+        return;
+    }
+    // Get selected canvas and zone
+    const canvasID = canvasSelect.value;
+    const zoneID = anchorSelect.value;
+    if (!canvasID || !zoneID) {
+        createStatus.textContent = 'Please select both a canvas and a zone before creating notes.';
+        return;
+    }
+    const notesToSend = selectedNotes.map(i => (lastScanData.notes ? lastScanData.notes[i] : lastScanData[i]));
+    try {
+        const res = await fetch('/api/create-notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ canvasID, zoneID, notes: notesToSend })
+        });
+        const data = await res.json();
+        if (res.ok && data.status) {
+            createStatus.textContent = data.status;
+        } else {
+            createStatus.textContent = data.error || 'Error creating notes. Please check your canvas/zone selection and try again.';
+        }
+    } catch (err) {
+        createStatus.textContent = 'Network or server error while creating notes.';
+    }
 });
