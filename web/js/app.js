@@ -253,20 +253,20 @@ window.addEventListener('DOMContentLoaded', () => {
                 zoneScale = anchor.scale !== undefined ? Math.round(anchor.scale * 100) / 100 : 1;
             }
         }
+        imageStatus.textContent = 'Processing image with AI...';
+        const formData = new FormData();
+        formData.append('image', uploadedImage);
+        formData.append('zoneDimensions', JSON.stringify([zoneWidth, zoneHeight]));
+        formData.append('zoneLocation', JSON.stringify([zoneX, zoneY]));
+        formData.append('zoneScale', JSON.stringify(zoneScale));
         const res = await fetch('/api/scan-notes', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                imageData: [],
-                imageDimensions: [640, 480],
-                zoneDimensions: [zoneWidth, zoneHeight],
-                zoneLocation: [zoneX, zoneY],
-                zoneScale: zoneScale
-            })
+            body: formData
         });
         const data = await res.json();
         lastScanData = data;
         renderThumbnails(data.notes || []);
+        imageStatus.textContent = '';
     }
 
     // --- Thumbnails, Selection, Select All/Deselect All ---

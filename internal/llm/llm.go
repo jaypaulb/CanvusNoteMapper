@@ -27,3 +27,6 @@ func AnalyzeImage(imageData []byte) ([]Note, int, int) {
 		{Content: "Center", Color: "#800080", X: 540, Y: 260, Width: 200, Height: 200},
 	}, imgW, imgH
 }
+
+// Re-export ExtractPostitNotes and its types for use by other packages
+// (see extract_postit_notes.go for implementation)

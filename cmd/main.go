@@ -4,10 +4,21 @@ import (
 	"log"
 	"net/http"
 
+	"os"
+
 	"github.com/jaypaulb/CanvusNoteMapper/internal/api"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file if present
+	if err := godotenv.Load(); err != nil {
+		log.Println("[main] No .env file found or failed to load .env (this is fine if running in prod with env vars set)")
+	} else {
+		log.Println("[main] .env file loaded successfully")
+	}
+	log.Printf("[main] GOOGLE_GENAI_API_KEY loaded: %v", os.Getenv("GOOGLE_GENAI_API_KEY") != "")
+
 	mux := http.NewServeMux()
 
 	// API routes

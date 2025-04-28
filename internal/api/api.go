@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -36,10 +37,9 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	// For now, just return success (mock)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"uploaded"}`))
-	log.Println("Image uploaded (mock)")
+	log.Println("[UploadImageHandler] Image uploaded (real endpoint, not mock)")
 }
 
 // POST /api/scan-notes
@@ -48,55 +48,103 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct {
-		ImageData       []byte  `json:"imageData"`
-		ImageDimensions [2]int  `json:"imageDimensions"`
-		ZoneDimensions  [2]int  `json:"zoneDimensions"`
-		ZoneLocation    [2]int  `json:"zoneLocation"`
-		ZoneScale       float64 `json:"zoneScale"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	log.Println("[ScanNotesHandler] Request received: parsing multipart form...")
+	// Accept multipart/form-data with an image file and JSON fields
+	err := r.ParseMultipartForm(32 << 20) // 32MB max memory
+	if err != nil {
+		log.Printf("[ScanNotesHandler] Error parsing multipart form: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Invalid JSON"}`))
+		w.Write([]byte(`{"error":"Invalid multipart form"}`))
 		return
 	}
-	// Call LLM stub (now returns notes, imgW, imgH)
-	notes, imgW, imgH := llm.AnalyzeImage(req.ImageData)
-	// Call mapping stub (now takes imageWidth, imageHeight, zoneDimensions, zoneLocation as args)
-	mapped := mapping.MapNotesToZone(notes, imgW, imgH, req.ZoneDimensions, req.ZoneLocation)
-	// Set the scale of the mapped notes to the anchor's scale
-	for i := range mapped {
-		mapped[i].Scale = req.ZoneScale
+	file, fileHeader, err := r.FormFile("image")
+	if err != nil {
+		log.Printf("[ScanNotesHandler] No image file: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"Image file required"}`))
+		return
 	}
-	// Transform mapped notes to MCS API format
+	defer file.Close()
+	imageData := make([]byte, 0)
+	buf := make([]byte, 4096)
+	for {
+		n, err := file.Read(buf)
+		if n > 0 {
+			imageData = append(imageData, buf[:n]...)
+		}
+		if err != nil {
+			break
+		}
+	}
+	log.Printf("[ScanNotesHandler] Image received: name=%s, size=%d bytes", fileHeader.Filename, len(imageData))
+
+	// Parse additional fields from the form
+	zoneDimensions := [2]int{0, 0}
+	zoneLocation := [2]int{0, 0}
+	zoneScale := 1.0
+	if v := r.FormValue("zoneDimensions"); v != "" {
+		json.Unmarshal([]byte(v), &zoneDimensions)
+	}
+	if v := r.FormValue("zoneLocation"); v != "" {
+		json.Unmarshal([]byte(v), &zoneLocation)
+	}
+	if v := r.FormValue("zoneScale"); v != "" {
+		json.Unmarshal([]byte(v), &zoneScale)
+	}
+	log.Printf("[ScanNotesHandler] zoneDimensions=%v, zoneLocation=%v, zoneScale=%v", zoneDimensions, zoneLocation, zoneScale)
+
+	// Convert image to data URI (assume PNG for now)
+	dataURI := "data:image/png;base64," + encodeToBase64(imageData)
+	log.Printf("[ScanNotesHandler] Data URI created (length=%d)", len(dataURI))
+	llmInput := llm.ExtractPostitNotesInput{PhotoDataURI: dataURI}
+	log.Printf("[ScanNotesHandler] LLM input built. Calling ExtractPostitNotes...")
+
+	log.Printf("[ScanNotesHandler] Sending to LLM with system prompt: %s", "You are an AI that can extract the content, background color and location of each of the post it notes from an image. You will return a JSON array containing objects representing each postit note. Analyze the image and extract data for each post-it note: Image: <image> Return a JSON array of postit note objects. Each object should have the following structure: { \"background_color\": \"#FFFF00\", \"location\": {\"x\": 1080, \"y\": 520}, \"scale\": 1, \"size\": {\"height\": 200, \"width\": 200}, \"state\": \"normal\", \"text\": \"Bottom Right\", \"widget_type\": \"Note\" }")
+	notes, err := llm.ExtractPostitNotes(llmInput)
+	if err != nil {
+		log.Printf("[ScanNotesHandler] LLM extraction failed: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to extract notes: ` + err.Error() + `"}`))
+		return
+	}
+	log.Printf("[ScanNotesHandler] LLM extraction complete. %d notes found. Raw LLM output: %+v", len(notes), notes)
+
+	// Map LLM output to llm.Note for further processing
+	var rawNotes []llm.Note
+	for _, n := range notes {
+		rawNotes = append(rawNotes, llm.Note{
+			Content: n.Text,
+			Color:   n.BackgroundColor,
+			X:       n.Location["x"],
+			Y:       n.Location["y"],
+			Width:   n.Size["width"],
+			Height:  n.Size["height"],
+			Scale:   n.Scale,
+		})
+	}
+	imgW, imgH := 1280, 720 // TODO: Optionally extract from LLM or image metadata
+	mapped := mapping.MapNotesToZone(rawNotes, imgW, imgH, zoneDimensions, zoneLocation)
+	for i := range mapped {
+		mapped[i].Scale = zoneScale
+	}
 	mcsNotes := mapping.MapNotesToMCSFormat(mapped)
-	w.Header().Set("Content-Type", "application/json")
-	// Respond with mapped notes (in MCS format) and original image size for downstream scaling
+	log.Printf("[ScanNotesHandler] Notes mapped for frontend. Final note count: %d", len(mcsNotes))
 	resp := map[string]interface{}{
+		"status":      "complete",
+		"message":     "LLM processing complete. Notes extracted.",
 		"notes":       mcsNotes,
 		"imageWidth":  imgW,
 		"imageHeight": imgH,
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
-	// Log relational data and mapping process
-	log.Printf("[ScanNotesHandler] Image size: width=%d, height=%d", imgW, imgH)
-	log.Printf("[ScanNotesHandler] Zone size: width=%d, height=%d", req.ZoneDimensions[0], req.ZoneDimensions[1])
-	log.Printf("[ScanNotesHandler] Zone location: x=%d, y=%d", req.ZoneLocation[0], req.ZoneLocation[1])
-	log.Printf("[ScanNotesHandler] Zone scale: %.4f", req.ZoneScale)
-	// Calculate scale and offsets for logging (same as mapping logic)
-	scale := 0.0
-	offsetX := 0.0
-	offsetY := 0.0
-	if imgW != 0 && imgH != 0 && req.ZoneDimensions[0] != 0 && req.ZoneDimensions[1] != 0 {
-		scale = min(float64(req.ZoneDimensions[0])/float64(imgW), float64(req.ZoneDimensions[1])/float64(imgH))
-		offsetX = (float64(req.ZoneDimensions[0]) - float64(imgW)*scale) / 2
-		offsetY = (float64(req.ZoneDimensions[1]) - float64(imgH)*scale) / 2
-	}
-	log.Printf("[ScanNotesHandler] Scaling factor: %.4f", scale)
-	log.Printf("[ScanNotesHandler] Offset: x=%.2f, y=%.2f", offsetX, offsetY)
-	log.Printf("[ScanNotesHandler] Source notes (raw): %v", notes)
-	log.Printf("[ScanNotesHandler] Mapped notes: %v", mapped)
-	log.Println("Scanned notes and returned mock mapped data (with image size)")
+}
+
+// encodeToBase64 encodes bytes to a base64 string
+func encodeToBase64(data []byte) string {
+	// Use standard encoding, no line breaks
+	return base64.StdEncoding.EncodeToString(data)
 }
 
 // GET /api/get-anchors

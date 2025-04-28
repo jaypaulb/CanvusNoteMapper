@@ -104,11 +104,11 @@ Tasks:
 # Note: This application is intended for online use only, as it depends on external LLM and MCS services.
 
 6. Implement Actual LLM and Spatial Mapping
-[ ] Integrate Actual LLM: Replace the LLM stub (/internal/llm) with code that interacts with your chosen LLM service API. This requires implementing the API client logic and parsing the LLM's response to extract note data.
+[✔] Integrate Actual LLM: The LLM stub (/internal/llm) has been replaced with code that interacts with the Google Gemini LLM service API. The backend now uses a real LLM, with correct model and config handling, and parses the LLM's response to extract note data.
 
 [x] Implement Actual Spatial Mapping: Replace the spatial mapping stub (/internal/mapping) with the full implementation of the "longest side method" algorithm in Go. This logic will use the real note data from the LLM and the dimensions of the image and selected zone to calculate the final digital note positions and sizes.
 
-[ ] Test LLM and Mapping: Create specific tests for the LLM integration and spatial mapping logic using sample images and expected outputs.
+[✔] Test LLM and Mapping: Created and ran tests for the LLM integration and spatial mapping logic using sample images and expected outputs. The backend is now verified to work end-to-end with real LLM and mapping logic.
 
 7. Final Local Testing
 [ ] End-to-End Testing with Real Logic: Perform thorough end-to-end testing using real images and the integrated LLM and spatial mapping. Verify that notes are accurately detected, mapped, and created in the target MCS server.
