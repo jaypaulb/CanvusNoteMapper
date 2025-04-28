@@ -11,10 +11,14 @@ The backend now uses the Google Gemini LLM (e.g., gemini-2.0-flash or gemini-1.5
 
 ## .env Requirements
 
-You must set the following environment variable in your `.env` file:
+Create a `.env` file in the project root with the following variables:
 
 ```
+# Required
 GOOGLE_GENAI_API_KEY=your_google_gemini_api_key_here
+
+# Optional
+PORT=8080  # Default is 8080 if not specified
 ```
 
 ## Status
@@ -62,7 +66,10 @@ GOOGLE_GENAI_API_KEY=your_google_gemini_api_key_here
 5. The server will start on `http://localhost:8080` by default.
 
 ### 4. Customization
-- To change the port, set the `PORT` environment variable in your `.env` file (if supported in your codebase).
+- **Port Configuration**: 
+  - Set the `PORT` environment variable in your `.env` file or system environment
+  - Example: `PORT=3000` to run on port 3000
+  - If not specified, the server defaults to port 8080
 - Ensure all dependencies (such as the Gemini API key) are set in the environment or `.env` file.
 
 ---

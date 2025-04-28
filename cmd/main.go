@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-
 	"os"
 
 	"github.com/jaypaulb/CanvusNoteMapper/internal/api"
@@ -18,6 +18,12 @@ func main() {
 		log.Println("[main] .env file loaded successfully")
 	}
 	log.Printf("[main] GOOGLE_GENAI_API_KEY loaded: %v", os.Getenv("GOOGLE_GENAI_API_KEY") != "")
+
+	// Get port from environment variable or use default
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	mux := http.NewServeMux()
 
@@ -34,8 +40,9 @@ func main() {
 	// Serve static files from web directory
 	mux.Handle("/", http.FileServer(http.Dir("web")))
 
-	log.Println("Server starting on :8080...")
-	err := http.ListenAndServe(":8080", mux)
+	addr := fmt.Sprintf(":%s", port)
+	log.Printf("Server starting on %s...", addr)
+	err := http.ListenAndServe(addr, mux)
 	if err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
