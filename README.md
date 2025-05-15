@@ -24,6 +24,15 @@ PORT=8080  # Default is 8080 if not specified
 
 - The backend and frontend are now fully integrated and tested end-to-end with real LLM and spatial mapping logic.
 
+## Download Binaries
+
+Prebuilt binaries for Windows and Linux are available from the [GitHub Releases page](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest).
+
+- [Download notescanner.exe (Windows)](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest/download/notescanner.exe)
+- [Download notescanner-linux-amd64 (Linux)](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest/download/notescanner-linux-amd64)
+
+> **Note:** Binaries are no longer included in the repository. Always download the latest version from the Releases page above.
+
 ## Deployment Instructions
 
 ### 1. Prepare the .env File
@@ -36,30 +45,30 @@ GOOGLE_GENAI_API_KEY=your_google_gemini_api_key_here
 
 ### 2. Running on Windows
 
-1. Use the prebuilt binary:
-   - `bin/canvusnotemapper.exe`
-2. Open PowerShell, navigate to the project root, and run:
+1. Download the prebuilt binary from the [Releases page](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest):
+   - [notescanner.exe](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest/download/notescanner.exe)
+2. Open PowerShell, navigate to the download location, and run:
    ```powershell
-   .\bin\canvusnotemapper.exe
+   .\notescanner.exe
    ```
 3. The server will start on `http://localhost:8080` by default.
 
 ### 3. Running on Ubuntu 18.04 (Linux)
 
-1. Use the prebuilt binary:
-   - `bin/canvusnotemapper-linux`
+1. Download the prebuilt binary from the [Releases page](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest):
+   - [notescanner-linux-amd64](https://github.com/jaypaulb/CanvusNoteMapper/releases/latest/download/notescanner-linux-amd64)
 2. Copy the binary and `.env` file to your Ubuntu server:
    ```sh
-   scp bin/canvusnotemapper-linux user@your-server:/path/to/app/
+   scp notescanner-linux-amd64 user@your-server:/path/to/app/
    scp .env user@your-server:/path/to/app/
    ```
 3. SSH into your server and make the binary executable:
    ```sh
-   chmod +x canvusnotemapper-linux
+   chmod +x notescanner-linux-amd64
    ```
 4. Run the server:
    ```sh
-   ./canvusnotemapper-linux
+   ./notescanner-linux-amd64
    ```
 5. The server will start on `http://localhost:8080` by default.
 
