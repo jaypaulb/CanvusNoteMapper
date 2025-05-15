@@ -37,7 +37,14 @@
                 <button id="capture-btn" type="button">Capture</button>
             </div>
             <div id="camera-container" style="display:none; position: relative; margin: 0 auto;">
-                <button id="close-camera" type="button" style="position:absolute;top:8px;left:8px;z-index:2;width:32px;height:32px;font-size:1.2em;background:#222;color:#fff;border:none;border-radius:50%;cursor:pointer;">&times;</button>
+                <button id="close-camera" type="button" style="position:absolute;top:8px;left:8px;z-index:2;width:40px;height:40px;background:#222;color:#fff;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
+                    <span style="font-size:1.5em;line-height:1;">&times;</span>
+                </button>
+                <button id="switch-camera" type="button" title="Switch Camera" style="position:absolute;top:8px;right:8px;z-index:2;width:40px;height:40px;background:#222;color:#fff;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:auto;">
+                        <path d="M7 7V3L2 8l5 5V9c3.31 0 6 2.69 6 6 0 1.1-.9 2-2 2H7v2h4c2.21 0 4-1.79 4-4 0-4.42-3.58-8-8-8zm10 10v4l5-5-5-5v4c-3.31 0-6-2.69-6-6 0-1.1.9-2 2-2h4V5h-4c-2.21 0-4 1.79-4 4 0 4.42 3.58 8 8 8z" fill="#fff"/>
+                    </svg>
+                </button>
                 <video id="camera-stream" autoplay playsinline style="display:none;max-width:100%;border-radius:8px;"></video>
             </div>
             <canvas id="capture-canvas" style="display:none;"></canvas>
