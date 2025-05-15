@@ -1,9 +1,9 @@
-const CACHE_NAME = 'canvus-notescan-v1';
+const CACHE_NAME = 'canvus-notescan-v20240610';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
-  '/css/style.css',
-  '/js/app.js',
+  '/css/style.css?v=20240610',
+  '/js/app.js?v=20240610',
   '/manifest.json'
 ];
 
