@@ -37,7 +37,7 @@ func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutp
 	if apiKey == "" {
 		return nil, errors.New("GOOGLE_GENAI_API_KEY not set in environment")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -47,8 +47,10 @@ func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutp
 
 	imageData, err := decodeDataURI(input.PhotoDataURI)
 	if err != nil {
+		log.Printf("[ExtractPostitNotes] Failed to decode data URI: %v", err)
 		return nil, err
 	}
+	log.Printf("[ExtractPostitNotes] Successfully decoded image data, size: %d bytes", len(imageData))
 
 	// Use controlled generation with responseSchema and responseMimeType
 	config := &genai.GenerationConfig{
@@ -99,7 +101,7 @@ Return JSON array. Each object structure:
   "widget_type": "Note"
 }`
 
-	model := client.GenerativeModel("gemini-2.0-flash")
+	model := client.GenerativeModel("gemini-2.0-flash-preview-image-generation")
 	model.GenerationConfig = *config
 	parts := []genai.Part{
 		genai.Text(prompt),
@@ -107,8 +109,10 @@ Return JSON array. Each object structure:
 	}
 	resp, err := model.GenerateContent(ctx, parts...)
 	if err != nil {
+		log.Printf("[ExtractPostitNotes] Failed to generate content: %v", err)
 		return nil, err
 	}
+	log.Printf("[ExtractPostitNotes] Successfully generated content from model")
 
 	// Log the full raw LLM response for debugging
 	respJson, _ := json.MarshalIndent(resp, "", "  ")
