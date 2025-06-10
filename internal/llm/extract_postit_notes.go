@@ -35,15 +35,22 @@ type ExtractPostitNotesOutput struct {
 func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutput, error) {
 	apiKey := os.Getenv("GOOGLE_GENAI_API_KEY")
 	if apiKey == "" {
+		log.Printf("[ExtractPostitNotes] GOOGLE_GENAI_API_KEY environment variable is not set")
 		return nil, errors.New("GOOGLE_GENAI_API_KEY not set in environment")
 	}
+	log.Printf("[ExtractPostitNotes] API key found, length: %d", len(apiKey))
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	log.Printf("[ExtractPostitNotes] Created context with 5-minute timeout")
+
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
+		log.Printf("[ExtractPostitNotes] Failed to create Gemini client: %v", err)
 		return nil, err
 	}
 	defer client.Close()
+	log.Printf("[ExtractPostitNotes] Successfully created Gemini client")
 
 	imageData, err := decodeDataURI(input.PhotoDataURI)
 	if err != nil {
@@ -85,6 +92,11 @@ func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutp
 			},
 		},
 	}
+	log.Printf("[ExtractPostitNotes] Created generation config with JSON schema")
+
+	model := client.GenerativeModel("gemini-2.5-flash-preview-05-20")
+	model.GenerationConfig = *config
+	log.Printf("[ExtractPostitNotes] Created model with config")
 
 	prompt := `Analyze <image> for post-it notes. Extract content, color, size, and precise top-left pixel location ('x','y'). Relative positioning and size matter, but location ('x','y') is key.
 
@@ -101,12 +113,12 @@ Return JSON array. Each object structure:
   "widget_type": "Note"
 }`
 
-	model := client.GenerativeModel("gemini-2.0-flash-preview-image-generation")
-	model.GenerationConfig = *config
 	parts := []genai.Part{
 		genai.Text(prompt),
 		genai.Blob{MIMEType: "image/png", Data: imageData},
 	}
+	log.Printf("[ExtractPostitNotes] Created parts with prompt and image data")
+
 	resp, err := model.GenerateContent(ctx, parts...)
 	if err != nil {
 		log.Printf("[ExtractPostitNotes] Failed to generate content: %v", err)
@@ -125,13 +137,18 @@ Return JSON array. Each object structure:
 			for _, part := range c.Content.Parts {
 				if txt, ok := part.(genai.Text); ok {
 					jsonStr := extractJSONFromMarkdown(string(txt))
+					log.Printf("[ExtractPostitNotes] Extracted JSON string: %s", jsonStr)
 					if err := json.Unmarshal([]byte(jsonStr), &outputs); err == nil && len(outputs) > 0 {
+						log.Printf("[ExtractPostitNotes] Successfully parsed %d notes from response", len(outputs))
 						return outputs, nil
+					} else {
+						log.Printf("[ExtractPostitNotes] Failed to parse JSON or no notes found: %v", err)
 					}
 				}
 			}
 		}
 	}
+	log.Printf("[ExtractPostitNotes] No valid JSON array found in LLM response")
 	return nil, errors.New("No valid JSON array found in LLM response")
 }
 
