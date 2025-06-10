@@ -276,7 +276,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         imageStatus.textContent = 'Processing image with AI...';
         const formData = new FormData();
-        formData.append('image', uploadedImage);
+        // Remove the image from the form data since it's stored on the backend
         formData.append('zoneDimensions', JSON.stringify([zoneWidth, zoneHeight]));
         formData.append('zoneLocation', JSON.stringify([zoneX, zoneY]));
         formData.append('zoneScale', JSON.stringify(zoneScale));

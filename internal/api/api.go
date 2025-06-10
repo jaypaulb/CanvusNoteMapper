@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	"github.com/jaypaulb/CanvusNoteMapper/internal/config"
+	"github.com/jaypaulb/CanvusNoteMapper/internal/image"
 	"github.com/jaypaulb/CanvusNoteMapper/internal/llm"
 	"github.com/jaypaulb/CanvusNoteMapper/internal/mapping"
 	"github.com/jaypaulb/CanvusNoteMapper/internal/mcs"
@@ -49,12 +50,22 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[UploadImageHandler] Finished reading file, total size: %d bytes", len(imageData))
 
-	// Store the image data in memory
-	lastUploadedImage = imageData
+	// Process the image to ensure it's within size limits
+	processedImage, err := image.ProcessImage(imageData)
+	if err != nil {
+		log.Printf("[UploadImageHandler] Failed to process image: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to process image: ` + err.Error() + `"}`))
+		return
+	}
+	log.Printf("[UploadImageHandler] Processed image size: %d bytes", len(processedImage))
+
+	// Store the processed image data in memory
+	lastUploadedImage = processedImage
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"uploaded"}`))
-	log.Printf("[UploadImageHandler] Image uploaded successfully, size: %d bytes", len(imageData))
+	log.Printf("[UploadImageHandler] Image uploaded and processed successfully")
 }
 
 // POST /api/scan-notes
@@ -64,18 +75,9 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("[ScanNotesHandler] Request received: parsing multipart form...")
-	// Accept multipart/form-data with an image file and JSON fields
-	err := r.ParseMultipartForm(32 << 20) // 32MB max memory
-	if err != nil {
-		log.Printf("[ScanNotesHandler] Error parsing multipart form: %v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Invalid multipart form"}`))
-		return
-	}
-	log.Printf("[ScanNotesHandler] Successfully parsed multipart form, size limit: %d bytes", 32<<20)
+	log.Println("[ScanNotesHandler] Request received")
 
-	// Use the last uploaded image instead of trying to get it from the form
+	// Use the last uploaded image
 	if len(lastUploadedImage) == 0 {
 		log.Printf("[ScanNotesHandler] No image available for scanning")
 		w.WriteHeader(http.StatusBadRequest)
@@ -99,12 +101,9 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[ScanNotesHandler] Zone parameters: dimensions=%v, location=%v, scale=%v",
 		zoneDimensions, zoneLocation, zoneScale)
 
-	// Convert image to data URI (assume PNG for now)
-	dataURI := "data:image/png;base64," + encodeToBase64(lastUploadedImage)
-	log.Printf("[ScanNotesHandler] Created data URI, length: %d bytes", len(dataURI))
-
-	llmInput := llm.ExtractPostitNotesInput{PhotoDataURI: dataURI}
-	log.Printf("[ScanNotesHandler] Created LLM input with data URI length: %d", len(llmInput.PhotoDataURI))
+	// Send raw image bytes to LLM
+	llmInput := llm.ExtractPostitNotesInput{ImageData: lastUploadedImage}
+	log.Printf("[ScanNotesHandler] Created LLM input with image data size: %d bytes", len(llmInput.ImageData))
 
 	log.Printf("[ScanNotesHandler] Calling ExtractPostitNotes...")
 	notes, err := llm.ExtractPostitNotes(llmInput)

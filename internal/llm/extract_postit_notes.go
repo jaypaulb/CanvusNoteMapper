@@ -2,12 +2,10 @@ package llm
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,7 +15,7 @@ import (
 
 // ExtractPostitNotesInput represents the input for extracting Post-it notes from an image.
 type ExtractPostitNotesInput struct {
-	PhotoDataURI string `json:"photoDataUri"`
+	ImageData []byte `json:"imageData"`
 }
 
 // ExtractPostitNotesOutput represents a single extracted Post-it note in the required format.
@@ -31,7 +29,7 @@ type ExtractPostitNotesOutput struct {
 	WidgetType      string         `json:"widget_type"`
 }
 
-// ExtractPostitNotes extracts notes from a photoDataUri using Google Gemini.
+// ExtractPostitNotes extracts notes from an image using Google Gemini.
 func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutput, error) {
 	apiKey := os.Getenv("GOOGLE_GENAI_API_KEY")
 	if apiKey == "" {
@@ -52,12 +50,16 @@ func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutp
 	defer client.Close()
 	log.Printf("[ExtractPostitNotes] Successfully created Gemini client")
 
-	imageData, err := decodeDataURI(input.PhotoDataURI)
+	log.Printf("[ExtractPostitNotes] Processing image data, size: %d bytes", len(input.ImageData))
+
+	// Upload the image file to Gemini
+	file, err := client.UploadFile(ctx, input.ImageData, "image/png")
 	if err != nil {
-		log.Printf("[ExtractPostitNotes] Failed to decode data URI: %v", err)
+		log.Printf("[ExtractPostitNotes] Failed to upload file to Gemini: %v", err)
 		return nil, err
 	}
-	log.Printf("[ExtractPostitNotes] Successfully decoded image data, size: %d bytes", len(imageData))
+	defer file.Close()
+	log.Printf("[ExtractPostitNotes] Successfully uploaded file to Gemini")
 
 	// Use controlled generation with responseSchema and responseMimeType
 	config := &genai.GenerationConfig{
@@ -115,9 +117,9 @@ Return JSON array. Each object structure:
 
 	parts := []genai.Part{
 		genai.Text(prompt),
-		genai.Blob{MIMEType: "image/png", Data: imageData},
+		file,
 	}
-	log.Printf("[ExtractPostitNotes] Created parts with prompt and image data")
+	log.Printf("[ExtractPostitNotes] Created parts with prompt and uploaded file")
 
 	resp, err := model.GenerateContent(ctx, parts...)
 	if err != nil {
@@ -150,17 +152,6 @@ Return JSON array. Each object structure:
 	}
 	log.Printf("[ExtractPostitNotes] No valid JSON array found in LLM response")
 	return nil, errors.New("No valid JSON array found in LLM response")
-}
-
-// decodeDataURI decodes a data URI and returns the raw image bytes.
-func decodeDataURI(dataURI string) ([]byte, error) {
-	// Regex to extract base64 data from data URI
-	re := regexp.MustCompile(`^data:[^;]+;base64,(.*)$`)
-	matches := re.FindStringSubmatch(dataURI)
-	if len(matches) != 2 {
-		return nil, errors.New("invalid data URI format")
-	}
-	return base64.StdEncoding.DecodeString(matches[1])
 }
 
 // extractJSONFromMarkdown extracts JSON from a Markdown code block if present.
