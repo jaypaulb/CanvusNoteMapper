@@ -76,38 +76,7 @@
         </section>
     </main>
     
-    <!-- Cache-busting script loader -->
-    <script>
-        // Disable service worker completely during development
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    registration.unregister();
-                }
-            });
-        }
-        
-        // Dynamic cache-busting for CSS and JS
-        const timestamp = Date.now();
-        
-        // Update CSS href with timestamp
-        const cssLink = document.getElementById('main-css');
-        cssLink.href = `css/style.css?v=${timestamp}`;
-        
-        // Load JS with cache-busting
-        const script = document.createElement('script');
-        script.src = `js/app.js?v=${timestamp}`;
-        script.onload = function() {
-            console.log(`Loaded app.js with cache-buster: ${timestamp}`);
-        };
-        document.head.appendChild(script);
-        
-        // Force reload from server on every page load during development
-        if (performance.navigation.type !== performance.navigation.TYPE_RELOAD) {
-            console.log('Force refreshing to avoid cache...');
-            // Add a small delay to prevent infinite reload loops
-            setTimeout(() => location.reload(true), 100);
-        }
-    </script>
+    <!-- Standard script loading -->
+    <script src="js/app.js"></script>
 </body>
 </html>

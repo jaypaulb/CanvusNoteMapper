@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,23 +8,6 @@ import (
 	"github.com/jaypaulb/CanvusNoteMapper/internal/api"
 	"github.com/joho/godotenv"
 )
-
-// noCacheHandler wraps the file server to add anti-cache headers
-func noCacheHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set aggressive anti-cache headers for all static files
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
-		w.Header().Set("Last-Modified", "")
-		w.Header().Set("ETag", "")
-
-		// Log the request for debugging
-		log.Printf("[static] Serving %s with anti-cache headers", r.URL.Path)
-
-		h.ServeHTTP(w, r)
-	})
-}
 
 func main() {
 	// Load .env file if present
@@ -54,14 +36,13 @@ func main() {
 	mux.HandleFunc("/api/get-anchors", api.GetAnchorsOnlyHandler)
 	mux.HandleFunc("/api/get-anchor-info", api.GetAnchorInfoHandler)
 
-	// Serve static files from web directory with anti-cache headers
+	// Serve static files from web directory
 	fileServer := http.FileServer(http.Dir("web"))
-	mux.Handle("/", noCacheHandler(fileServer))
+	mux.Handle("/", fileServer)
 
-	addr := fmt.Sprintf(":%s", port)
-	log.Printf("Server starting on %s with anti-cache headers enabled...", addr)
-	err := http.ListenAndServe(addr, mux)
-	if err != nil {
-		log.Fatalf("Server failed: %v", err)
+	// Start server
+	log.Printf("[main] Starting server on port %s", port)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		log.Fatalf("[main] Server failed to start: %v", err)
 	}
 }

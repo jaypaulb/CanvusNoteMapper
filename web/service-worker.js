@@ -1,42 +1,50 @@
-// NO-OP Service Worker - Disables all caching for development
-// This service worker intentionally does nothing to prevent caching issues during development
+// Standard Service Worker for caching static assets
+const CACHE_NAME = 'canvus-note-mapper-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/css/style.css',
+  '/js/app.js'
+];
 
-console.log('Service Worker: Caching disabled for development');
-
-// Install event - no caching
+// Install event - cache static assets
 self.addEventListener('install', event => {
-  console.log('Service Worker: Install - No caching');
-  self.skipWaiting(); // Immediately activate
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        console.log('Service Worker: Caching static assets');
+        return cache.addAll(STATIC_ASSETS);
+      })
+      .then(() => self.skipWaiting())
+  );
 });
 
-// Activate event - clear all existing caches
+// Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('Service Worker: Activate - Clearing all caches');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          console.log('Service Worker: Deleting cache:', cacheName);
-          return caches.delete(cacheName);
+          if (cacheName !== CACHE_NAME) {
+            console.log('Service Worker: Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
         })
       );
-    }).then(() => {
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Fetch event - always fetch from network, never cache
+// Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-  console.log('Service Worker: Fetching from network (no cache):', event.request.url);
   event.respondWith(
-    fetch(event.request, {
-      cache: 'no-store', // Force fresh fetch every time
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    })
+    caches.match(event.request)
+      .then(response => {
+        if (response) {
+          return response; // Return cached response
+        }
+        return fetch(event.request); // Fallback to network
+      })
   );
 });
 
