@@ -52,15 +52,6 @@ func ExtractPostitNotes(input ExtractPostitNotesInput) ([]ExtractPostitNotesOutp
 
 	log.Printf("[ExtractPostitNotes] Processing image data, size: %d bytes", len(input.ImageData))
 
-	// Upload the image file to Gemini
-	file, err := client.UploadFile(ctx, input.ImageData, "image/png")
-	if err != nil {
-		log.Printf("[ExtractPostitNotes] Failed to upload file to Gemini: %v", err)
-		return nil, err
-	}
-	defer file.Close()
-	log.Printf("[ExtractPostitNotes] Successfully uploaded file to Gemini")
-
 	// Use controlled generation with responseSchema and responseMimeType
 	config := &genai.GenerationConfig{
 		ResponseMIMEType: "application/json",
@@ -115,11 +106,12 @@ Return JSON array. Each object structure:
   "widget_type": "Note"
 }`
 
+	// Create content parts with the prompt and image data
 	parts := []genai.Part{
 		genai.Text(prompt),
-		file,
+		genai.ImageData("image/png", input.ImageData),
 	}
-	log.Printf("[ExtractPostitNotes] Created parts with prompt and uploaded file")
+	log.Printf("[ExtractPostitNotes] Created parts with prompt and image data")
 
 	resp, err := model.GenerateContent(ctx, parts...)
 	if err != nil {
