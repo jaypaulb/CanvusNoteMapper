@@ -83,10 +83,12 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Process image with LLM immediately
 	log.Printf("[UploadImageHandler] Processing image with LLM...")
+	log.Printf("[UploadImageHandler] Using MIME type: '%s'", mimeType)
 	llmInput := llm.ExtractPostitNotesInput{
 		ImageData: processedImage,
 		MimeType:  mimeType,
 	}
+	log.Printf("[UploadImageHandler] Created LLM input with MIME type: '%s'", llmInput.MimeType)
 
 	notes, err := llm.ExtractPostitNotes(llmInput)
 	if err != nil {

@@ -57,10 +57,12 @@ func ProcessImage(input []byte) ([]byte, string, error) {
 	if strings.EqualFold(format, "jpeg") || strings.EqualFold(format, "jpg") {
 		err = jpeg.Encode(&output, img, &jpeg.Options{Quality: Quality})
 		mimeType = "image/jpeg"
+		log.Printf("[ProcessImage] Set MIME type to: %s", mimeType)
 	} else {
 		// Default to PNG for other formats
 		err = png.Encode(&output, img)
 		mimeType = "image/png"
+		log.Printf("[ProcessImage] Set MIME type to: %s", mimeType)
 	}
 	if err != nil {
 		log.Printf("[ProcessImage] Failed to encode image: %v", err)
@@ -88,5 +90,6 @@ func ProcessImage(input []byte) ([]byte, string, error) {
 		}
 	}
 
+	log.Printf("[ProcessImage] Returning MIME type: %s", mimeType)
 	return outputBytes, mimeType, nil
 }

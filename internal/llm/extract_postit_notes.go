@@ -108,6 +108,7 @@ Return JSON array. Each object structure:
 }`
 
 	// Create content parts with the prompt and image data
+	log.Printf("[ExtractPostitNotes] Using MIME type: '%s'", input.MimeType)
 	parts := []genai.Part{
 		genai.Text(prompt),
 		genai.ImageData(input.MimeType, input.ImageData),
