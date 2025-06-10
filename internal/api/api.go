@@ -19,27 +19,36 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	file, _, err := r.FormFile("image")
+	file, fileHeader, err := r.FormFile("image")
 	if err != nil {
+		log.Printf("[UploadImageHandler] Failed to get form file: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"error":"Image file required"}`))
 		return
 	}
 	defer file.Close()
+	log.Printf("[UploadImageHandler] Received file: name=%s, size=%d bytes, content-type=%s",
+		fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+
 	imageData := make([]byte, 0)
 	buf := make([]byte, 4096)
+	totalRead := 0
 	for {
 		n, err := file.Read(buf)
 		if n > 0 {
 			imageData = append(imageData, buf[:n]...)
+			totalRead += n
+			log.Printf("[UploadImageHandler] Read %d bytes, total so far: %d", n, totalRead)
 		}
 		if err != nil {
 			break
 		}
 	}
+	log.Printf("[UploadImageHandler] Finished reading file, total size: %d bytes", len(imageData))
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"uploaded"}`))
-	log.Println("[UploadImageHandler] Image uploaded (real endpoint, not mock)")
+	log.Printf("[UploadImageHandler] Image uploaded successfully, size: %d bytes", len(imageData))
 }
 
 // POST /api/scan-notes
@@ -58,6 +67,8 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"error":"Invalid multipart form"}`))
 		return
 	}
+	log.Printf("[ScanNotesHandler] Successfully parsed multipart form, size limit: %d bytes", 32<<20)
+
 	file, fileHeader, err := r.FormFile("image")
 	if err != nil {
 		log.Printf("[ScanNotesHandler] No image file: %v", err)
@@ -66,18 +77,24 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	log.Printf("[ScanNotesHandler] Received file: name=%s, size=%d bytes, content-type=%s",
+		fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
+
 	imageData := make([]byte, 0)
 	buf := make([]byte, 4096)
+	totalRead := 0
 	for {
 		n, err := file.Read(buf)
 		if n > 0 {
 			imageData = append(imageData, buf[:n]...)
+			totalRead += n
+			log.Printf("[ScanNotesHandler] Read %d bytes, total so far: %d", n, totalRead)
 		}
 		if err != nil {
 			break
 		}
 	}
-	log.Printf("[ScanNotesHandler] Image received: name=%s, size=%d bytes", fileHeader.Filename, len(imageData))
+	log.Printf("[ScanNotesHandler] Finished reading file, total size: %d bytes", len(imageData))
 
 	// Parse additional fields from the form
 	zoneDimensions := [2]int{0, 0}
@@ -92,15 +109,17 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 	if v := r.FormValue("zoneScale"); v != "" {
 		json.Unmarshal([]byte(v), &zoneScale)
 	}
-	log.Printf("[ScanNotesHandler] zoneDimensions=%v, zoneLocation=%v, zoneScale=%v", zoneDimensions, zoneLocation, zoneScale)
+	log.Printf("[ScanNotesHandler] Zone parameters: dimensions=%v, location=%v, scale=%v",
+		zoneDimensions, zoneLocation, zoneScale)
 
 	// Convert image to data URI (assume PNG for now)
 	dataURI := "data:image/png;base64," + encodeToBase64(imageData)
-	log.Printf("[ScanNotesHandler] Data URI created (length=%d)", len(dataURI))
-	llmInput := llm.ExtractPostitNotesInput{PhotoDataURI: dataURI}
-	log.Printf("[ScanNotesHandler] LLM input built. Calling ExtractPostitNotes...")
+	log.Printf("[ScanNotesHandler] Created data URI, length: %d bytes", len(dataURI))
 
-	log.Printf("[ScanNotesHandler] Sending to LLM with system prompt: %s", "You are an AI that can extract the content, background color and location of each of the post it notes from an image. You will return a JSON array containing objects representing each postit note. Analyze the image and extract data for each post-it note: Image: <image> Return a JSON array of postit note objects. Each object should have the following structure: { \"background_color\": \"#FFFF00\", \"location\": {\"x\": 1080, \"y\": 520}, \"scale\": 1, \"size\": {\"height\": 200, \"width\": 200}, \"state\": \"normal\", \"text\": \"Bottom Right\", \"widget_type\": \"Note\" }")
+	llmInput := llm.ExtractPostitNotesInput{PhotoDataURI: dataURI}
+	log.Printf("[ScanNotesHandler] Created LLM input with data URI length: %d", len(llmInput.PhotoDataURI))
+
+	log.Printf("[ScanNotesHandler] Calling ExtractPostitNotes...")
 	notes, err := llm.ExtractPostitNotes(llmInput)
 	if err != nil {
 		log.Printf("[ScanNotesHandler] LLM extraction failed: %v", err)
@@ -108,11 +127,11 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"error":"Failed to extract notes: ` + err.Error() + `"}`))
 		return
 	}
-	log.Printf("[ScanNotesHandler] LLM extraction complete. %d notes found. Raw LLM output: %+v", len(notes), notes)
+	log.Printf("[ScanNotesHandler] LLM extraction complete. Found %d notes", len(notes))
 
 	// Map LLM output to llm.Note for further processing
 	var rawNotes []llm.Note
-	for _, n := range notes {
+	for i, n := range notes {
 		rawNotes = append(rawNotes, llm.Note{
 			Content: n.Text,
 			Color:   n.BackgroundColor,
@@ -122,14 +141,22 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 			Height:  n.Size["height"],
 			Scale:   n.Scale,
 		})
+		log.Printf("[ScanNotesHandler] Mapped note %d: text='%s', color=%s, pos=(%d,%d), size=%dx%d",
+			i, n.Text, n.BackgroundColor, n.Location["x"], n.Location["y"], n.Size["width"], n.Size["height"])
 	}
+
 	imgW, imgH := 1280, 720 // TODO: Optionally extract from LLM or image metadata
+	log.Printf("[ScanNotesHandler] Using image dimensions: %dx%d", imgW, imgH)
+
 	mapped := mapping.MapNotesToZone(rawNotes, imgW, imgH, zoneDimensions, zoneLocation)
 	for i := range mapped {
 		mapped[i].Scale = zoneScale
 	}
+	log.Printf("[ScanNotesHandler] Mapped %d notes to zone", len(mapped))
+
 	mcsNotes := mapping.MapNotesToMCSFormat(mapped)
-	log.Printf("[ScanNotesHandler] Notes mapped for frontend. Final note count: %d", len(mcsNotes))
+	log.Printf("[ScanNotesHandler] Converted %d notes to MCS format", len(mcsNotes))
+
 	resp := map[string]interface{}{
 		"status":      "complete",
 		"message":     "LLM processing complete. Notes extracted.",
@@ -139,6 +166,7 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+	log.Printf("[ScanNotesHandler] Response sent with %d notes", len(mcsNotes))
 }
 
 // encodeToBase64 encodes bytes to a base64 string

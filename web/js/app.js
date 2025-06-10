@@ -206,10 +206,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const imageInput = document.getElementById('image-input');
     const imageStatus = document.getElementById('image-status');
     const preview = document.getElementById('preview');
+    const uploadBtn = document.getElementById('upload-btn');
     let uploadedImage = null;
     let lastScanData = null;
     let selectedNotes = [];
     const imageInputLabel = document.getElementById('image-input-label');
+
     // Make Choose File label trigger file input
     imageInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
@@ -221,27 +223,37 @@ window.addEventListener('DOMContentLoaded', () => {
             };
             reader.readAsDataURL(file);
             uploadedImage = file;
-            // Auto-upload
-            const formData = new FormData();
-            formData.append('image', file);
-            try {
-                const res = await fetch('/api/upload-image', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-                imageStatus.textContent = data.status || data.error || 'Upload error.';
-                if (data.status === 'uploaded') {
-                    // Auto-trigger scan
-                    await autoScanNotes();
-                }
-            } catch (err) {
-                console.error('Upload error:', err);
-                imageStatus.textContent = 'Upload failed: ' + err.message;
-            }
+            // Show upload button
+            uploadBtn.style.display = 'inline-block';
+            imageStatus.textContent = 'File selected. Click Upload to process.';
         }
-        // Reset file input value to allow re-selecting the same file and prevent double dialog
-        imageInput.value = "";
+    });
+
+    // Handle upload button click
+    uploadBtn.addEventListener('click', async () => {
+        if (!uploadedImage) {
+            imageStatus.textContent = 'No file selected';
+            return;
+        }
+
+        imageStatus.textContent = 'Uploading...';
+        const formData = new FormData();
+        formData.append('image', uploadedImage);
+        try {
+            const res = await fetch('/api/upload-image', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            imageStatus.textContent = data.status || data.error || 'Upload error.';
+            if (data.status === 'uploaded') {
+                // Auto-trigger scan
+                await autoScanNotes();
+            }
+        } catch (err) {
+            console.error('Upload error:', err);
+            imageStatus.textContent = 'Upload failed: ' + err.message;
+        }
     });
 
     async function autoScanNotes() {
