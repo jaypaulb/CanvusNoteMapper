@@ -138,3 +138,45 @@ dist
 docs/
 
 bin/
+
+# Binaries
+notescanner-linux-amd64
+notescanner-windows-amd64.exe
+notescanner-darwin-amd64
+*.exe
+
+# Go build artifacts
+*.o
+*.a
+*.so
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+
+# Node modules (if you add any JS tooling)
+node_modules/
+
+# Go modules cache
+go.sum.bak

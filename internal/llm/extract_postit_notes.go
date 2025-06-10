@@ -109,9 +109,17 @@ Return JSON array. Each object structure:
 
 	// Create content parts with the prompt and image data
 	log.Printf("[ExtractPostitNotes] Using MIME type: '%s'", input.MimeType)
+
+	// Extract format from MIME type (e.g., "image/png" -> "png")
+	format := input.MimeType
+	if strings.HasPrefix(format, "image/") {
+		format = strings.TrimPrefix(format, "image/")
+	}
+	log.Printf("[ExtractPostitNotes] Using format for ImageData: '%s'", format)
+
 	parts := []genai.Part{
 		genai.Text(prompt),
-		genai.ImageData(input.MimeType, input.ImageData),
+		genai.ImageData(format, input.ImageData),
 	}
 	log.Printf("[ExtractPostitNotes] Created parts with prompt and image data")
 
