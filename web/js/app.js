@@ -496,21 +496,36 @@ window.addEventListener('DOMContentLoaded', () => {
             console.log('[Camera] Calling getUserMedia...');
             imageStatus.textContent = '⏳ Waiting for permission popup...';
             
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // Try with the provided constraints first
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                console.log('[Camera] First attempt failed:', err.name);
+                
+                // If first attempt fails, try with basic constraints
+                if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+                    console.log('[Camera] Trying with basic constraints...');
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                } else {
+                    throw err; // Re-throw if it's not a constraint error
+                }
+            }
+            
             console.log('[Camera] Camera access granted, stream:', stream);
             
             cameraStream.srcObject = stream;
             cameraContainer.style.display = 'flex';
             cameraStream.style.display = 'block';
             preview.style.display = 'none';
-            imageStatus.textContent = '✅ Camera ready! Click video to capture photo.';
             
             // Log video track info
             const videoTrack = stream.getVideoTracks()[0];
             if (videoTrack) {
-                console.log('[Camera] Video track settings:', videoTrack.getSettings());
                 const settings = videoTrack.getSettings();
+                console.log('[Camera] Video track settings:', settings);
                 imageStatus.textContent = `✅ Camera ready! (${settings.width}x${settings.height}) Click to capture.`;
+            } else {
+                imageStatus.textContent = '✅ Camera ready! Click to capture.';
             }
             
         } catch (err) {
@@ -574,42 +589,25 @@ window.addEventListener('DOMContentLoaded', () => {
                     console.log('[Camera] Using', videoInputDevices.length, 'available camera(s)');
                     imageStatus.textContent = `🎥 Setting up camera (${videoInputDevices.length} available)...`;
                     
-                    // Try basic constraints first
+                    // Start with basic constraints
                     let constraints = { 
                         video: { 
-                            facingMode: currentFacingMode,
-                            width: { min: 640, ideal: 1280, max: 1920 },
-                            height: { min: 480, ideal: 720, max: 1080 }
+                            facingMode: currentFacingMode
                         } 
                     };
                     
-                    // If only one camera or facingMode fails, use deviceId
+                    // If only one camera, use deviceId
                     if (videoInputDevices.length === 1) {
                         console.log('[Camera] Single camera detected, using deviceId');
                         imageStatus.textContent = '📱 Single camera detected, configuring...';
                         constraints = { 
                             video: { 
-                                deviceId: { exact: videoInputDevices[0].deviceId },
-                                width: { min: 640, ideal: 1280, max: 1920 },
-                                height: { min: 480, ideal: 720, max: 1080 }
+                                deviceId: { exact: videoInputDevices[0].deviceId }
                             } 
                         };
                     }
                     
-                    try {
-                        await startCamera(constraints);
-                    } catch (err) {
-                        if (err.name === 'OverconstrainedError') {
-                            console.log('[Camera] Falling back to basic constraints');
-                            // Try with minimal constraints
-                            constraints = { 
-                                video: true 
-                            };
-                            await startCamera(constraints);
-                        } else {
-                            throw err;
-                        }
-                    }
+                    await startCamera(constraints);
                     
                 } catch (err) {
                     console.error('[Camera] Error in capture flow:', err);
