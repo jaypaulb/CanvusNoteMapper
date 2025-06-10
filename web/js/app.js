@@ -212,20 +212,41 @@ window.addEventListener('DOMContentLoaded', () => {
     let selectedNotes = [];
     const imageInputLabel = document.getElementById('image-input-label');
 
+    // Debug: Check if elements are found
+    console.log('[DOM Check] imageInput:', imageInput);
+    console.log('[DOM Check] uploadBtn:', uploadBtn);
+    console.log('[DOM Check] imageInputLabel:', imageInputLabel);
+    console.log('[DOM Check] preview:', preview);
+
     // Make Choose File label trigger file input
     imageInput.addEventListener('change', async (e) => {
+        console.log('[imageInput] File selection changed');
         const file = e.target.files[0];
+        console.log('[imageInput] Selected file:', file);
+        
         if (file) {
+            console.log('[imageInput] File details:', {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
+            
             const reader = new FileReader();
             reader.onload = function(evt) {
+                console.log('[imageInput] FileReader loaded, setting preview');
                 preview.src = evt.target.result;
                 preview.style.display = 'block';
             };
             reader.readAsDataURL(file);
             uploadedImage = file;
+            
             // Show upload button
+            console.log('[imageInput] Showing upload button');
             uploadBtn.style.display = 'inline-block';
             imageStatus.textContent = 'File selected. Click Upload to process.';
+            console.log('[imageInput] Upload button display style:', uploadBtn.style.display);
+        } else {
+            console.log('[imageInput] No file selected');
         }
     });
 
@@ -277,13 +298,23 @@ window.addEventListener('DOMContentLoaded', () => {
             console.log('[uploadBtn] Response data:', data);
             
             if (data.status === 'complete' && data.notes) {
+                console.log('[uploadBtn] Upload successful, processing notes:', data.notes);
+                console.log('[uploadBtn] Number of notes found:', data.notes.length);
+                
                 // Process the extracted notes
                 lastScanData = data;
+                console.log('[uploadBtn] Set lastScanData:', lastScanData);
+                
+                console.log('[uploadBtn] Calling renderThumbnails with notes:', data.notes);
                 renderThumbnails(data.notes || []);
+                
                 imageStatus.textContent = `Processing complete. Found ${data.notes.length} notes.`;
+                console.log('[uploadBtn] Updated image status');
             } else if (data.error) {
+                console.log('[uploadBtn] Upload failed with error:', data.error);
                 imageStatus.textContent = 'Processing failed: ' + data.error;
             } else {
+                console.log('[uploadBtn] Unexpected response:', data);
                 imageStatus.textContent = data.message || 'Processing complete';
             }
         } catch (err) {
@@ -301,19 +332,31 @@ window.addEventListener('DOMContentLoaded', () => {
     const createStatus = document.getElementById('create-status');
 
     function renderThumbnails(notes) {
+        console.log('[renderThumbnails] Called with notes:', notes);
+        console.log('[renderThumbnails] Notes is array:', Array.isArray(notes));
+        console.log('[renderThumbnails] Notes length:', notes ? notes.length : 'null');
+        
         if (!Array.isArray(notes) || notes.length === 0) {
+            console.log('[renderThumbnails] No notes to render, hiding interface');
             if (scanResultsContainer) scanResultsContainer.style.display = 'none';
             if (createBtn) createBtn.style.display = 'none';
             return;
         }
+        
+        console.log('[renderThumbnails] Showing scan results container');
         if (scanResultsContainer) scanResultsContainer.style.display = '';
         if (createBtn) createBtn.style.display = '';
         if (thumbnailsDiv) thumbnailsDiv.innerHTML = '';
+        
         // If selectedNotes is empty, select all by default
         if (!selectedNotes || selectedNotes.length === 0) {
             selectedNotes = notes.map((n, i) => i);
+            console.log('[renderThumbnails] Selected all notes by default:', selectedNotes);
         }
+        
+        console.log('[renderThumbnails] Creating thumbnails for', notes.length, 'notes');
         notes.forEach((note, idx) => {
+            console.log(`[renderThumbnails] Processing note ${idx}:`, note);
             const thumb = document.createElement('div');
             thumb.className = 'thumbnail';
             if (note.background_color) thumb.style.background = note.background_color;
@@ -322,8 +365,15 @@ window.addEventListener('DOMContentLoaded', () => {
                 <div><strong>${note.text || 'Note'}</strong></div>
                 <div style="font-size:0.8em;">${note.size?.width || 0}x${note.size?.height || 0}</div>
             `;
-            if (thumbnailsDiv) thumbnailsDiv.appendChild(thumb);
+            if (thumbnailsDiv) {
+                thumbnailsDiv.appendChild(thumb);
+                console.log(`[renderThumbnails] Added thumbnail ${idx} to DOM`);
+            } else {
+                console.error('[renderThumbnails] thumbnailsDiv not found!');
+            }
         });
+        
+        console.log('[renderThumbnails] Setting up checkbox listeners');
         // Checkbox listeners
         if (thumbnailsDiv) {
             thumbnailsDiv.querySelectorAll('.note-checkbox').forEach(cb => {
@@ -334,10 +384,14 @@ window.addEventListener('DOMContentLoaded', () => {
                     } else {
                         selectedNotes = selectedNotes.filter(i => i !== idx);
                     }
+                    console.log('[renderThumbnails] Updated selectedNotes:', selectedNotes);
                 });
             });
         }
+        
+        console.log('[renderThumbnails] Calling updateCanvasAnchorInfo');
         updateCanvasAnchorInfo();
+        console.log('[renderThumbnails] Function complete');
     }
 
     if (selectAllBtn) {
