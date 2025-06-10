@@ -10,6 +10,23 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// noCacheHandler wraps the file server to add anti-cache headers
+func noCacheHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set aggressive anti-cache headers for all static files
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		w.Header().Set("Last-Modified", "")
+		w.Header().Set("ETag", "")
+
+		// Log the request for debugging
+		log.Printf("[static] Serving %s with anti-cache headers", r.URL.Path)
+
+		h.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// Load .env file if present
 	if err := godotenv.Load(); err != nil {
@@ -37,11 +54,12 @@ func main() {
 	mux.HandleFunc("/api/get-anchors", api.GetAnchorsOnlyHandler)
 	mux.HandleFunc("/api/get-anchor-info", api.GetAnchorInfoHandler)
 
-	// Serve static files from web directory
-	mux.Handle("/", http.FileServer(http.Dir("web")))
+	// Serve static files from web directory with anti-cache headers
+	fileServer := http.FileServer(http.Dir("web"))
+	mux.Handle("/", noCacheHandler(fileServer))
 
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("Server starting on %s...", addr)
+	log.Printf("Server starting on %s with anti-cache headers enabled...", addr)
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
 		log.Fatalf("Server failed: %v", err)

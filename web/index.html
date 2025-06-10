@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvus NoteScan</title>
+    
+    <!-- Aggressive anti-cache headers -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/style.css?v=20240610">
+    <!-- Dynamic cache-busting with timestamp -->
+    <link rel="stylesheet" href="css/style.css" id="main-css">
 </head>
 <body class="dark">
     <header style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 1em; height: 64px;">
@@ -68,12 +75,38 @@
             <div id="zone-status"></div>
         </section>
     </main>
-    <script src="js/app.js?v=20240610"></script>
+    
+    <!-- Cache-busting script loader -->
     <script>
+        // Disable service worker completely during development
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('service-worker.js');
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                }
             });
+        }
+        
+        // Dynamic cache-busting for CSS and JS
+        const timestamp = Date.now();
+        
+        // Update CSS href with timestamp
+        const cssLink = document.getElementById('main-css');
+        cssLink.href = `css/style.css?v=${timestamp}`;
+        
+        // Load JS with cache-busting
+        const script = document.createElement('script');
+        script.src = `js/app.js?v=${timestamp}`;
+        script.onload = function() {
+            console.log(`Loaded app.js with cache-buster: ${timestamp}`);
+        };
+        document.head.appendChild(script);
+        
+        // Force reload from server on every page load during development
+        if (performance.navigation.type !== performance.navigation.TYPE_RELOAD) {
+            console.log('Force refreshing to avoid cache...');
+            // Add a small delay to prevent infinite reload loops
+            setTimeout(() => location.reload(true), 100);
         }
     </script>
 </body>
