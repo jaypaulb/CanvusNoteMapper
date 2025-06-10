@@ -432,31 +432,35 @@ window.addEventListener('DOMContentLoaded', () => {
     function checkCameraSupport() {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             console.error('[Camera] getUserMedia not supported');
-            imageStatus.textContent = 'Camera not supported on this browser/device.';
+            imageStatus.textContent = '❌ Camera not supported on this browser/device.';
             return false;
         }
         
         // Check HTTPS requirement (except localhost)
         if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             console.error('[Camera] HTTPS required for camera access');
-            imageStatus.textContent = 'Camera requires HTTPS connection (except localhost).';
+            imageStatus.textContent = '❌ Camera requires HTTPS connection (except localhost).';
             return false;
         }
         
         console.log('[Camera] Camera support check passed');
+        imageStatus.textContent = '✅ Camera support check passed...';
         return true;
     }
 
     // Simple camera test function
     async function testCameraAccess() {
         console.log('[Camera] Testing basic camera access...');
+        imageStatus.textContent = '🔍 Testing basic camera access...';
         try {
             const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
             console.log('[Camera] Test successful - camera access granted');
+            imageStatus.textContent = '✅ Camera test successful!';
             testStream.getTracks().forEach(track => track.stop());
             return true;
         } catch (err) {
             console.error('[Camera] Test failed:', err);
+            imageStatus.textContent = '❌ Camera test failed: ' + err.message;
             return false;
         }
     }
@@ -464,29 +468,34 @@ window.addEventListener('DOMContentLoaded', () => {
     async function getVideoInputDevices() {
         try {
             console.log('[Camera] Enumerating video devices...');
+            imageStatus.textContent = '📹 Looking for cameras...';
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
             console.log('[Camera] Found video devices:', videoDevices.length, videoDevices);
+            imageStatus.textContent = `📹 Found ${videoDevices.length} camera(s)`;
             return videoDevices;
         } catch (err) {
             console.error('[Camera] Error enumerating devices:', err);
-            imageStatus.textContent = 'Error accessing camera devices: ' + err.message;
+            imageStatus.textContent = '❌ Error accessing camera devices: ' + err.message;
             return [];
         }
     }
 
     async function startCamera(constraints) {
         console.log('[Camera] Starting camera with constraints:', constraints);
+        imageStatus.textContent = '📷 Starting camera...';
         
         if (stream) {
             console.log('[Camera] Stopping existing stream');
             stream.getTracks().forEach(track => track.stop());
         }
 
-        imageStatus.textContent = 'Requesting camera access...';
+        imageStatus.textContent = '🔐 Requesting camera permission...';
         
         try {
             console.log('[Camera] Calling getUserMedia...');
+            imageStatus.textContent = '⏳ Waiting for permission popup...';
+            
             stream = await navigator.mediaDevices.getUserMedia(constraints);
             console.log('[Camera] Camera access granted, stream:', stream);
             
@@ -494,12 +503,14 @@ window.addEventListener('DOMContentLoaded', () => {
             cameraContainer.style.display = 'flex';
             cameraStream.style.display = 'block';
             preview.style.display = 'none';
-            imageStatus.textContent = 'Click video to capture photo.';
+            imageStatus.textContent = '✅ Camera ready! Click video to capture photo.';
             
             // Log video track info
             const videoTrack = stream.getVideoTracks()[0];
             if (videoTrack) {
                 console.log('[Camera] Video track settings:', videoTrack.getSettings());
+                const settings = videoTrack.getSettings();
+                imageStatus.textContent = `✅ Camera ready! (${settings.width}x${settings.height}) Click to capture.`;
             }
             
         } catch (err) {
@@ -507,29 +518,31 @@ window.addEventListener('DOMContentLoaded', () => {
             console.error('[Camera] Error name:', err.name);
             console.error('[Camera] Error message:', err.message);
             
-            let userMessage = 'Camera access failed: ';
+            let userMessage = '❌ Camera failed: ';
+            let debugInfo = `\n🔧 Debug: ${err.name} - ${err.message}`;
+            
             switch (err.name) {
                 case 'NotFoundError':
                 case 'DevicesNotFoundError':
-                    userMessage += 'No camera found on this device.';
+                    userMessage += 'No camera found on this device.' + debugInfo;
                     break;
                 case 'NotReadableError':
                 case 'TrackStartError':
-                    userMessage += 'Camera is already in use by another application.';
+                    userMessage += 'Camera is being used by another app.' + debugInfo;
                     break;
                 case 'OverconstrainedError':
                 case 'ConstraintNotSatisfiedError':
-                    userMessage += 'Camera constraints not supported.';
+                    userMessage += 'Camera settings not supported.' + debugInfo;
                     break;
                 case 'NotAllowedError':
                 case 'PermissionDeniedError':
-                    userMessage += 'Camera permission denied. Check browser settings.';
+                    userMessage += 'Permission denied! Check browser settings or try refreshing.' + debugInfo;
                     break;
                 case 'SecurityError':
-                    userMessage += 'Camera access blocked due to security policy.';
+                    userMessage += 'Security blocked. HTTPS required?' + debugInfo;
                     break;
                 default:
-                    userMessage += err.message || 'Unknown error.';
+                    userMessage += (err.message || 'Unknown error.') + debugInfo;
             }
             
             imageStatus.textContent = userMessage;
@@ -540,6 +553,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (captureBtn) {
         captureBtn.addEventListener('click', async () => {
             console.log('[Camera] Capture button clicked');
+            imageStatus.textContent = '🎯 Capture button clicked...';
             
             if (!checkCameraSupport()) {
                 return;
@@ -547,16 +561,18 @@ window.addEventListener('DOMContentLoaded', () => {
             
             if (!stream) {
                 console.log('[Camera] No active stream, requesting camera access...');
+                imageStatus.textContent = '🚀 Starting camera setup...';
                 
                 try {
                     videoInputDevices = await getVideoInputDevices();
                     
                     if (videoInputDevices.length === 0) {
-                        imageStatus.textContent = 'No camera devices found on this device.';
+                        imageStatus.textContent = '❌ No camera devices found on this device.';
                         return;
                     }
                     
                     console.log('[Camera] Using', videoInputDevices.length, 'available camera(s)');
+                    imageStatus.textContent = `🎥 Setting up camera (${videoInputDevices.length} available)...`;
                     
                     // Try basic constraints first
                     let constraints = { 
@@ -570,6 +586,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     // If only one camera or facingMode fails, use deviceId
                     if (videoInputDevices.length === 1) {
                         console.log('[Camera] Single camera detected, using deviceId');
+                        imageStatus.textContent = '📱 Single camera detected, configuring...';
                         constraints = { 
                             video: { 
                                 deviceId: { exact: videoInputDevices[0].deviceId },
@@ -583,16 +600,18 @@ window.addEventListener('DOMContentLoaded', () => {
                     
                 } catch (err) {
                     console.error('[Camera] Error in capture flow:', err);
-                    imageStatus.textContent = 'Camera initialization failed: ' + err.message;
+                    imageStatus.textContent = '❌ Camera setup failed: ' + err.message + '\n🔧 Try refreshing the page or check browser settings.';
                 }
                 
             } else {
                 console.log('[Camera] Closing active camera');
+                imageStatus.textContent = '📷 Closing camera...';
                 closeCamera();
             }
         });
     } else {
         console.error('[Camera] captureBtn not found in DOM!');
+        imageStatus.textContent = '❌ ERROR: Capture button not found in page!';
     }
 
     if (switchCameraBtn) {
