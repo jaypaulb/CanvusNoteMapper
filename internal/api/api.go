@@ -13,6 +13,9 @@ import (
 	"github.com/jaypaulb/CanvusNoteMapper/internal/mcs"
 )
 
+// Global variable to store the last uploaded image
+var lastUploadedImage []byte
+
 // POST /api/upload-image
 func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -46,6 +49,9 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[UploadImageHandler] Finished reading file, total size: %d bytes", len(imageData))
 
+	// Store the image data in memory
+	lastUploadedImage = imageData
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"uploaded"}`))
 	log.Printf("[UploadImageHandler] Image uploaded successfully, size: %d bytes", len(imageData))
@@ -69,32 +75,13 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[ScanNotesHandler] Successfully parsed multipart form, size limit: %d bytes", 32<<20)
 
-	file, fileHeader, err := r.FormFile("image")
-	if err != nil {
-		log.Printf("[ScanNotesHandler] No image file: %v", err)
+	// Use the last uploaded image instead of trying to get it from the form
+	if len(lastUploadedImage) == 0 {
+		log.Printf("[ScanNotesHandler] No image available for scanning")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Image file required"}`))
+		w.Write([]byte(`{"error":"No image available for scanning"}`))
 		return
 	}
-	defer file.Close()
-	log.Printf("[ScanNotesHandler] Received file: name=%s, size=%d bytes, content-type=%s",
-		fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"))
-
-	imageData := make([]byte, 0)
-	buf := make([]byte, 4096)
-	totalRead := 0
-	for {
-		n, err := file.Read(buf)
-		if n > 0 {
-			imageData = append(imageData, buf[:n]...)
-			totalRead += n
-			log.Printf("[ScanNotesHandler] Read %d bytes, total so far: %d", n, totalRead)
-		}
-		if err != nil {
-			break
-		}
-	}
-	log.Printf("[ScanNotesHandler] Finished reading file, total size: %d bytes", len(imageData))
 
 	// Parse additional fields from the form
 	zoneDimensions := [2]int{0, 0}
@@ -113,7 +100,7 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 		zoneDimensions, zoneLocation, zoneScale)
 
 	// Convert image to data URI (assume PNG for now)
-	dataURI := "data:image/png;base64," + encodeToBase64(imageData)
+	dataURI := "data:image/png;base64," + encodeToBase64(lastUploadedImage)
 	log.Printf("[ScanNotesHandler] Created data URI, length: %d bytes", len(dataURI))
 
 	llmInput := llm.ExtractPostitNotesInput{PhotoDataURI: dataURI}
