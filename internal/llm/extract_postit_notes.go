@@ -16,6 +16,7 @@ import (
 // ExtractPostitNotesInput represents the input for extracting Post-it notes from an image.
 type ExtractPostitNotesInput struct {
 	ImageData []byte `json:"imageData"`
+	MimeType  string `json:"mimeType"`
 }
 
 // ExtractPostitNotesOutput represents a single extracted Post-it note in the required format.
@@ -109,7 +110,7 @@ Return JSON array. Each object structure:
 	// Create content parts with the prompt and image data
 	parts := []genai.Part{
 		genai.Text(prompt),
-		genai.ImageData("image/png", input.ImageData),
+		genai.ImageData(input.MimeType, input.ImageData),
 	}
 	log.Printf("[ExtractPostitNotes] Created parts with prompt and image data")
 

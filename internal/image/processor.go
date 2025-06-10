@@ -19,12 +19,12 @@ const (
 
 // ProcessImage takes raw image bytes and returns optimized image bytes
 // that are within size limits while maintaining quality
-func ProcessImage(input []byte) ([]byte, error) {
+func ProcessImage(input []byte) ([]byte, string, error) {
 	// First try to decode the image
 	img, format, err := image.Decode(bytes.NewReader(input))
 	if err != nil {
 		log.Printf("[ProcessImage] Failed to decode image: %v", err)
-		return nil, err
+		return nil, "", err
 	}
 
 	// Get original dimensions
@@ -53,15 +53,18 @@ func ProcessImage(input []byte) ([]byte, error) {
 
 	// Encode with appropriate format and quality
 	var output bytes.Buffer
+	var mimeType string
 	if strings.EqualFold(format, "jpeg") || strings.EqualFold(format, "jpg") {
 		err = jpeg.Encode(&output, img, &jpeg.Options{Quality: Quality})
+		mimeType = "image/jpeg"
 	} else {
 		// Default to PNG for other formats
 		err = png.Encode(&output, img)
+		mimeType = "image/png"
 	}
 	if err != nil {
 		log.Printf("[ProcessImage] Failed to encode image: %v", err)
-		return nil, err
+		return nil, "", err
 	}
 
 	// Check final size
@@ -78,12 +81,12 @@ func ProcessImage(input []byte) ([]byte, error) {
 			err = jpeg.Encode(&output, img, &jpeg.Options{Quality: quality})
 			if err != nil {
 				log.Printf("[ProcessImage] Failed to encode with reduced quality: %v", err)
-				return nil, err
+				return nil, "", err
 			}
 			outputBytes = output.Bytes()
 			log.Printf("[ProcessImage] Reduced quality to %d, new size: %d bytes", quality, len(outputBytes))
 		}
 	}
 
-	return outputBytes, nil
+	return outputBytes, mimeType, nil
 }

@@ -16,6 +16,7 @@ import (
 
 // Global variable to store the last uploaded image
 var lastUploadedImage []byte
+var lastUploadedImageMimeType string
 
 // POST /api/upload-image
 func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
@@ -51,17 +52,18 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[UploadImageHandler] Finished reading file, total size: %d bytes", len(imageData))
 
 	// Process the image to ensure it's within size limits
-	processedImage, err := image.ProcessImage(imageData)
+	processedImage, mimeType, err := image.ProcessImage(imageData)
 	if err != nil {
 		log.Printf("[UploadImageHandler] Failed to process image: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"error":"Failed to process image: ` + err.Error() + `"}`))
 		return
 	}
-	log.Printf("[UploadImageHandler] Processed image size: %d bytes", len(processedImage))
+	log.Printf("[UploadImageHandler] Processed image size: %d bytes, MIME type: %s", len(processedImage), mimeType)
 
 	// Store the processed image data in memory
 	lastUploadedImage = processedImage
+	lastUploadedImageMimeType = mimeType
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"uploaded"}`))
@@ -101,8 +103,11 @@ func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[ScanNotesHandler] Zone parameters: dimensions=%v, location=%v, scale=%v",
 		zoneDimensions, zoneLocation, zoneScale)
 
-	// Send raw image bytes to LLM
-	llmInput := llm.ExtractPostitNotesInput{ImageData: lastUploadedImage}
+	// Create input for LLM extraction
+	llmInput := llm.ExtractPostitNotesInput{
+		ImageData: lastUploadedImage,
+		MimeType:  lastUploadedImageMimeType,
+	}
 	log.Printf("[ScanNotesHandler] Created LLM input with image data size: %d bytes", len(llmInput.ImageData))
 
 	log.Printf("[ScanNotesHandler] Calling ExtractPostitNotes...")
