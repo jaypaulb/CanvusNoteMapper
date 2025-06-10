@@ -578,8 +578,8 @@ window.addEventListener('DOMContentLoaded', () => {
                     let constraints = { 
                         video: { 
                             facingMode: currentFacingMode,
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
+                            width: { min: 640, ideal: 1280, max: 1920 },
+                            height: { min: 480, ideal: 720, max: 1080 }
                         } 
                     };
                     
@@ -590,13 +590,26 @@ window.addEventListener('DOMContentLoaded', () => {
                         constraints = { 
                             video: { 
                                 deviceId: { exact: videoInputDevices[0].deviceId },
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 }
+                                width: { min: 640, ideal: 1280, max: 1920 },
+                                height: { min: 480, ideal: 720, max: 1080 }
                             } 
                         };
                     }
                     
-                    await startCamera(constraints);
+                    try {
+                        await startCamera(constraints);
+                    } catch (err) {
+                        if (err.name === 'OverconstrainedError') {
+                            console.log('[Camera] Falling back to basic constraints');
+                            // Try with minimal constraints
+                            constraints = { 
+                                video: true 
+                            };
+                            await startCamera(constraints);
+                        } else {
+                            throw err;
+                        }
+                    }
                     
                 } catch (err) {
                     console.error('[Camera] Error in capture flow:', err);
