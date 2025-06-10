@@ -223,16 +223,21 @@ window.addEventListener('DOMContentLoaded', () => {
             uploadedImage = file;
             // Auto-upload
             const formData = new FormData();
-            formData.append('image', uploadedImage);
-            const res = await fetch('/api/upload-image', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            imageStatus.textContent = data.status || data.error || 'Upload error.';
-            if (data.status === 'uploaded') {
-                // Auto-trigger scan
-                autoScanNotes();
+            formData.append('image', file);
+            try {
+                const res = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                imageStatus.textContent = data.status || data.error || 'Upload error.';
+                if (data.status === 'uploaded') {
+                    // Auto-trigger scan
+                    await autoScanNotes();
+                }
+            } catch (err) {
+                console.error('Upload error:', err);
+                imageStatus.textContent = 'Upload failed: ' + err.message;
             }
         }
         // Reset file input value to allow re-selecting the same file and prevent double dialog
@@ -240,6 +245,10 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 
     async function autoScanNotes() {
+        if (!uploadedImage) {
+            imageStatus.textContent = 'No image available for scanning';
+            return;
+        }
         // Get selected anchor info
         const anchorOption = anchorSelect.options[anchorSelect.selectedIndex];
         let zoneWidth = 640, zoneHeight = 480, zoneX = 0, zoneY = 0, zoneScale = 1;
@@ -259,14 +268,22 @@ window.addEventListener('DOMContentLoaded', () => {
         formData.append('zoneDimensions', JSON.stringify([zoneWidth, zoneHeight]));
         formData.append('zoneLocation', JSON.stringify([zoneX, zoneY]));
         formData.append('zoneScale', JSON.stringify(zoneScale));
-        const res = await fetch('/api/scan-notes', {
-            method: 'POST',
-            body: formData
-        });
-        const data = await res.json();
-        lastScanData = data;
-        renderThumbnails(data.notes || []);
-        imageStatus.textContent = '';
+        try {
+            const res = await fetch('/api/scan-notes', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            const data = await res.json();
+            lastScanData = data;
+            renderThumbnails(data.notes || []);
+            imageStatus.textContent = '';
+        } catch (err) {
+            console.error('Scan error:', err);
+            imageStatus.textContent = 'Scan failed: ' + err.message;
+        }
     }
 
     // --- Thumbnails, Selection, Select All/Deselect All ---
