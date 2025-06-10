@@ -236,32 +236,11 @@ window.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        imageStatus.textContent = 'Uploading...';
+        imageStatus.textContent = 'Uploading and processing...';
         const formData = new FormData();
         formData.append('image', uploadedImage);
-        try {
-            const res = await fetch('/api/upload-image', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            imageStatus.textContent = data.status || data.error || 'Upload error.';
-            if (data.status === 'uploaded') {
-                // Auto-trigger scan
-                await autoScanNotes();
-            }
-        } catch (err) {
-            console.error('Upload error:', err);
-            imageStatus.textContent = 'Upload failed: ' + err.message;
-        }
-    });
-
-    async function autoScanNotes() {
-        if (!uploadedImage) {
-            imageStatus.textContent = 'No image available for scanning';
-            return;
-        }
-        // Get selected anchor info
+        
+        // Get selected anchor info for zone parameters
         const anchorOption = anchorSelect.options[anchorSelect.selectedIndex];
         let zoneWidth = 640, zoneHeight = 480, zoneX = 0, zoneY = 0, zoneScale = 1;
         if (anchorOption) {
@@ -274,29 +253,44 @@ window.addEventListener('DOMContentLoaded', () => {
                 zoneScale = anchor.scale !== undefined ? Math.round(anchor.scale * 100) / 100 : 1;
             }
         }
-        imageStatus.textContent = 'Processing image with AI...';
-        const formData = new FormData();
-        // Remove the image from the form data since it's stored on the backend
+        
+        // Add zone parameters to the upload request
         formData.append('zoneDimensions', JSON.stringify([zoneWidth, zoneHeight]));
         formData.append('zoneLocation', JSON.stringify([zoneX, zoneY]));
         formData.append('zoneScale', JSON.stringify(zoneScale));
+        
         try {
-            const res = await fetch('/api/scan-notes', {
+            console.log('[uploadBtn] Starting upload and processing...');
+            const res = await fetch('/api/upload-image', {
                 method: 'POST',
                 body: formData
             });
+            console.log('[uploadBtn] Response status:', res.status);
+            
             if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
+                const errorText = await res.text();
+                console.error('[uploadBtn] HTTP error response:', errorText);
+                throw new Error(`HTTP error! status: ${res.status}, response: ${errorText}`);
             }
+            
             const data = await res.json();
-            lastScanData = data;
-            renderThumbnails(data.notes || []);
-            imageStatus.textContent = '';
+            console.log('[uploadBtn] Response data:', data);
+            
+            if (data.status === 'complete' && data.notes) {
+                // Process the extracted notes
+                lastScanData = data;
+                renderThumbnails(data.notes || []);
+                imageStatus.textContent = `Processing complete. Found ${data.notes.length} notes.`;
+            } else if (data.error) {
+                imageStatus.textContent = 'Processing failed: ' + data.error;
+            } else {
+                imageStatus.textContent = data.message || 'Processing complete';
+            }
         } catch (err) {
-            console.error('Scan error:', err);
-            imageStatus.textContent = 'Scan failed: ' + err.message;
+            console.error('[uploadBtn] Upload/processing error:', err);
+            imageStatus.textContent = 'Upload/processing failed: ' + err.message;
         }
-    }
+    });
 
     // --- Thumbnails, Selection, Select All/Deselect All ---
     const scanResultsContainer = document.getElementById('scan-results-container');
@@ -465,21 +459,56 @@ window.addEventListener('DOMContentLoaded', () => {
             preview.style.margin = '1em auto 0 auto'; // Center preview
             cameraStream.style.display = 'none';
             cameraContainer.style.display = 'none';
-            imageStatus.textContent = 'Uploading photo...';
+            imageStatus.textContent = 'Uploading and processing photo...';
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
             }
+            
+            // Get selected anchor info for zone parameters
+            const anchorOption = anchorSelect.options[anchorSelect.selectedIndex];
+            let zoneWidth = 640, zoneHeight = 480, zoneX = 0, zoneY = 0, zoneScale = 1;
+            if (anchorOption) {
+                const anchor = anchorData.find(a => a.id === anchorOption.value);
+                if (anchor) {
+                    zoneWidth = Math.round(anchor.width);
+                    zoneHeight = Math.round(anchor.height);
+                    zoneX = Math.round(anchor.x);
+                    zoneY = Math.round(anchor.y);
+                    zoneScale = anchor.scale !== undefined ? Math.round(anchor.scale * 100) / 100 : 1;
+                }
+            }
+            
             const formData = new FormData();
             formData.append('image', blob, 'capture.png');
-            const res = await fetch('/api/upload-image', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            imageStatus.textContent = data.status || data.error || 'Upload error.';
-            if (data.status === 'uploaded') {
-                autoScanNotes();
+            formData.append('zoneDimensions', JSON.stringify([zoneWidth, zoneHeight]));
+            formData.append('zoneLocation', JSON.stringify([zoneX, zoneY]));
+            formData.append('zoneScale', JSON.stringify(zoneScale));
+            
+            try {
+                const res = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(`HTTP error! status: ${res.status}, response: ${errorText}`);
+                }
+                
+                const data = await res.json();
+                if (data.status === 'complete' && data.notes) {
+                    lastScanData = data;
+                    renderThumbnails(data.notes || []);
+                    imageStatus.textContent = `Processing complete. Found ${data.notes.length} notes.`;
+                } else if (data.error) {
+                    imageStatus.textContent = 'Processing failed: ' + data.error;
+                } else {
+                    imageStatus.textContent = data.message || 'Processing complete';
+                }
+            } catch (err) {
+                console.error('[camera] Upload/processing error:', err);
+                imageStatus.textContent = 'Upload/processing failed: ' + err.message;
             }
         }, 'image/png');
     });

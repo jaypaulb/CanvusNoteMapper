@@ -61,23 +61,95 @@ func UploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[UploadImageHandler] Processed image size: %d bytes, MIME type: %s", len(processedImage), mimeType)
 
-	// Store the processed image data in memory
+	// Store the processed image data in memory (for create-notes endpoint)
 	lastUploadedImage = processedImage
 	lastUploadedImageMimeType = mimeType
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"uploaded"}`))
-	log.Printf("[UploadImageHandler] Image uploaded and processed successfully")
+	// Get zone parameters from form data (optional, with defaults)
+	zoneDimensions := [2]int{640, 480}
+	zoneLocation := [2]int{0, 0}
+	zoneScale := 1.0
+	if v := r.FormValue("zoneDimensions"); v != "" {
+		json.Unmarshal([]byte(v), &zoneDimensions)
+	}
+	if v := r.FormValue("zoneLocation"); v != "" {
+		json.Unmarshal([]byte(v), &zoneLocation)
+	}
+	if v := r.FormValue("zoneScale"); v != "" {
+		json.Unmarshal([]byte(v), &zoneScale)
+	}
+	log.Printf("[UploadImageHandler] Zone parameters: dimensions=%v, location=%v, scale=%v",
+		zoneDimensions, zoneLocation, zoneScale)
+
+	// Process image with LLM immediately
+	log.Printf("[UploadImageHandler] Processing image with LLM...")
+	llmInput := llm.ExtractPostitNotesInput{
+		ImageData: processedImage,
+		MimeType:  mimeType,
+	}
+
+	notes, err := llm.ExtractPostitNotes(llmInput)
+	if err != nil {
+		log.Printf("[UploadImageHandler] LLM extraction failed: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"Failed to extract notes: ` + err.Error() + `"}`))
+		return
+	}
+	log.Printf("[UploadImageHandler] LLM extraction complete. Found %d notes", len(notes))
+
+	// Map LLM output to internal Note format
+	var rawNotes []llm.Note
+	for i, n := range notes {
+		rawNotes = append(rawNotes, llm.Note{
+			Content: n.Text,
+			Color:   n.BackgroundColor,
+			X:       n.Location["x"],
+			Y:       n.Location["y"],
+			Width:   n.Size["width"],
+			Height:  n.Size["height"],
+			Scale:   n.Scale,
+		})
+		log.Printf("[UploadImageHandler] Mapped note %d: text='%s', color=%s, pos=(%d,%d), size=%dx%d",
+			i, n.Text, n.BackgroundColor, n.Location["x"], n.Location["y"], n.Size["width"], n.Size["height"])
+	}
+
+	// Apply spatial mapping
+	imgW, imgH := 1280, 720 // TODO: Extract from image metadata
+	log.Printf("[UploadImageHandler] Using image dimensions: %dx%d", imgW, imgH)
+
+	mapped := mapping.MapNotesToZone(rawNotes, imgW, imgH, zoneDimensions, zoneLocation)
+	for i := range mapped {
+		mapped[i].Scale = zoneScale
+	}
+	log.Printf("[UploadImageHandler] Mapped %d notes to zone", len(mapped))
+
+	mcsNotes := mapping.MapNotesToMCSFormat(mapped)
+	log.Printf("[UploadImageHandler] Converted %d notes to MCS format", len(mcsNotes))
+
+	// Return the processed results immediately
+	resp := map[string]interface{}{
+		"status":      "complete",
+		"message":     "Image processed successfully. Notes extracted.",
+		"notes":       mcsNotes,
+		"imageWidth":  imgW,
+		"imageHeight": imgH,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+	log.Printf("[UploadImageHandler] Response sent with %d notes", len(mcsNotes))
 }
 
 // POST /api/scan-notes
 func ScanNotesHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[ScanNotesHandler] Request received: method=%s, URL=%s, remote=%s", r.Method, r.URL.String(), r.RemoteAddr)
+
 	if r.Method != http.MethodPost {
+		log.Printf("[ScanNotesHandler] Invalid method: %s", r.Method)
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	log.Println("[ScanNotesHandler] Request received")
+	log.Println("[ScanNotesHandler] Processing POST request")
 
 	// Use the last uploaded image
 	if len(lastUploadedImage) == 0 {
